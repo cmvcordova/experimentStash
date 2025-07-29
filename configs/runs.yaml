@@ -1,0 +1,32 @@
+runs:
+  # Example experiments - replace with your actual experiments
+  hello_world:
+    tool: hello-world
+    config: hello_world
+    description: "Hello World: Demonstration of the template"
+    tags: ["demo", "template"]
+    estimated_runtime: "1s"
+
+  baseline:
+    tool: hello-world  # Example baseline experiment
+    config: baseline_experiment
+    description: "Baseline experiment to establish performance"
+    tags: ["baseline", "template"]
+    estimated_runtime: "2h"
+    depends_on: []  # No dependencies
+
+  hyperparameter_sweep:
+    tool: hello-world  # Example hyperparameter optimization
+    config: hyperparameter_sweep
+    description: "Hyperparameter optimization experiment"
+    tags: ["sweep", "optimization"]
+    estimated_runtime: "24h"
+    depends_on: ["baseline"]  # Depends on baseline
+
+  analysis:
+    tool: hello-world  # Example analysis experiment
+    config: analysis_experiment
+    description: "Analysis experiment to understand model behavior"
+    tags: ["analysis", "interpretability"]
+    estimated_runtime: "1h"
+    depends_on: ["baseline"]  # Depends on baseline

@@ -1,0 +1,28 @@
+# baseline_experiment.yaml - Example baseline experiment
+tool: hello-world
+
+defaults:
+  - _self_
+
+experiment:
+  name: "baseline_experiment"
+  seed: 42
+  description: "Baseline experiment to establish performance"
+
+model:
+  name: "baseline_model"
+  hidden_size: 128
+  num_layers: 4
+  dropout: 0.1
+
+data:
+  batch_size: 32
+  num_workers: 4
+
+trainer:
+  max_epochs: 100
+  learning_rate: 0.001
+
+hydra:
+  run:
+    dir: outputs/baseline/${now:%Y-%m-%d}/${now:%H-%M-%S}

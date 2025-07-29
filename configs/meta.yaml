@@ -1,0 +1,22 @@
+# Tool declarations - single source of truth for tool metadata
+tools:
+  hello-world:
+    path: tools/hello-world
+    entrypoint: src/main.py
+    commit: HEAD  # Track main branch for development
+    python_version: "3.8"
+    dependencies: ["pyyaml>=6.0"]
+    description: "Minimal hello-world tool for template demonstration"
+
+# Experiment metadata
+experiment:
+  name: "neurips3025"
+  description: "NeurIPS 3025 submission experiments"
+  authors: [""]
+  date_created: "2024-01-01"
+
+# Validation rules
+validation:
+  require_commit_pins: false  # Allow branch tracking for development
+  validate_configs: true
+  check_dependencies: true

@@ -1,0 +1,12 @@
+# Ruff configuration file
+# See: https://docs.astral.sh/ruff/configuration/
+
+# Target Python version
+target-version = "py38"
+
+# Line length
+line-length = 88
+
+# Import sorting
+[lint.isort]
+known-first-party = ["scripts"]
