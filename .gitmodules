@@ -1,3 +1,7 @@
 [submodule "hello-world"]
 	path = tools/hello-world
 	url = https://github.com/cmvcordova/hello-world.git
+[submodule "tools/manylatents"]
+	path = tools/manylatents
+	url = https://github.com/cmvcordova/manyLatents.git
+	branch = main

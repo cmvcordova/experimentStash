@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Clean experiment runner that takes tool name and config name.
+"""
+
+import subprocess
+import sys
+import os
+import argparse
+import yaml
+
+
+def load_configs():
+    """Load meta and runs configs."""
+    try:
+        with open("configs/meta.yaml", "r") as f:
+            meta_config = yaml.safe_load(f)
+        with open("configs/runs.yaml", "r") as f:
+            runs_config = yaml.safe_load(f)
+        return meta_config, runs_config
+    except Exception as e:
+        print("[ERROR] Failed to load configs: {}".format(e))
+        return None, None
+
+
+def run_command(cmd, cwd=None, env=None):
+    """Run a command and return success status."""
+    try:
+        result = subprocess.call(cmd, cwd=cwd, env=env)
+        if result == 0:
+            print("[OK] Command executed successfully")
+            return True
+        else:
+            print("[ERROR] Command failed with exit code {}".format(result))
+            return False
+    except Exception as e:
+        print("[ERROR] Command failed: {}".format(e))
+        return False
+
+
+def run_with_venv_activation(tool_path, cmd):
+    """Run a command with the tool's venv activated."""
+    abs_tool_path = os.path.abspath(tool_path)
+    venv_activate = os.path.join(abs_tool_path, ".venv", "bin", "activate")
+    
+    if not os.path.exists(venv_activate):
+        print("[ERROR] No venv found at {}".format(venv_activate))
+        return False
+    
+    shell_cmd = "source {} && {}".format(venv_activate, " ".join(cmd))
+    bash_cmd = ["bash", "-c", shell_cmd]
+    
+    return run_command(bash_cmd, cwd=abs_tool_path)
+
+
+def main():
+    """Main entry point."""
+    parser = argparse.ArgumentParser(description="Run experiments")
+    parser.add_argument("tool", help="Tool name")
+    parser.add_argument("config", help="Config name")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    
+    args = parser.parse_args()
+    
+    try:
+        # Load configs
+        meta_config, runs_config = load_configs()
+        if not meta_config or not runs_config:
+            sys.exit(1)
+        
+        # Find the run
+        run_key = None
+        for key, run_info in runs_config.get("runs", {}).items():
+            if run_info.get("tool") == args.tool:
+                # Check if the config matches (either exact or as suffix)
+                config_path = run_info.get("config", "")
+                if config_path == args.config or config_path.endswith("/" + args.config):
+                    run_key = key
+                    break
+        
+        if not run_key:
+            print("[ERROR] No run found for tool '{}' and config '{}'".format(args.tool, args.config))
+            print("Available runs:")
+            for key, run_info in runs_config.get("runs", {}).items():
+                if run_info.get("tool") == args.tool:
+                    print("  {}: config={}".format(key, run_info.get("config")))
+            sys.exit(1)
+        
+        # Get tool info
+        tool_info = meta_config.get("tools", {}).get(args.tool)
+        if not tool_info:
+            print("[ERROR] Tool '{}' not found in meta config".format(args.tool))
+            sys.exit(1)
+        
+        tool_path = tool_info.get("path")
+        if not tool_path or not os.path.exists(tool_path):
+            print("[ERROR] Tool path '{}' does not exist".format(tool_path))
+            sys.exit(1)
+        
+        # Check venv
+        venv_path = os.path.join(tool_path, ".venv")
+        if not os.path.exists(venv_path):
+            print("[ERROR] No venv found at {}".format(venv_path))
+            print("Please set up the tool environment first:")
+            print("cd {} && uv sync".format(tool_path))
+            sys.exit(1)
+        
+        # Build the command - let each tool handle its own config loading
+        # The tool should know how to interpret the config path
+        entrypoint = tool_info.get("entrypoint")
+        if not entrypoint:
+            print("[ERROR] No entrypoint found for tool '{}'".format(args.tool))
+            sys.exit(1)
+        
+        # Get the config path from runs.yaml
+        config_path = runs_config["runs"][run_key]["config"]
+        
+        # Load the top-level config to get the experiment name
+        import yaml
+        top_level_config_path = os.path.abspath("configs/{}.yaml".format(config_path))
+        with open(top_level_config_path, 'r') as f:
+            top_level_config = yaml.safe_load(f)
+        
+        # Get the experiment name from the top-level config
+        experiment_name = top_level_config.get("experiment")
+        if not experiment_name:
+            print("[ERROR] No experiment specified in top-level config")
+            sys.exit(1)
+        
+        # Check if tool needs external config support
+        if tool_info.get("config_path_support", False):
+            # For tools that use top-level configs as experiment organizers
+            if entrypoint.startswith("-m "):
+                # Module call with experiment name
+                module_name = entrypoint[3:]  # Remove "-m "
+                cmd = ["python", "-m", module_name, "experiment={}".format(experiment_name)]
+            else:
+                # Direct file call with experiment name
+                cmd = ["python", entrypoint, "experiment={}".format(experiment_name)]
+        else:
+            # For tools that handle config paths internally (like manylatents with Hydra)
+            config_name = config_path.split("/")[-1]  # Extract just the config name
+            
+            if entrypoint.startswith("-m "):
+                # Module call: python -m src.main
+                module_name = entrypoint[3:]  # Remove "-m "
+                cmd = ["python", "-m", module_name, "experiment={}".format(config_name)]
+            else:
+                # Direct file call: python src/main.py
+                cmd = ["python", entrypoint, "experiment={}".format(config_name)]
+        
+        print("Running: {} with {}".format(run_key, args.tool))
+        print("Command: {}".format(" ".join(cmd)))
+        
+        success = run_with_venv_activation(tool_path, cmd)
+        
+        if success:
+            print("[OK] Experiment completed successfully")
+        else:
+            print("[ERROR] Experiment failed")
+            sys.exit(1)
+            
+    except Exception as e:
+        print("[ERROR] Error: {}".format(e))
+        if args.debug:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main() 
