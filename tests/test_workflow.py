@@ -133,8 +133,11 @@ def main():
     total = len(tests)
 
     for test in tests:
-        if test():
+        try:
+            test()
             passed += 1
+        except Exception as e:
+            print(f"❌ {test.__name__} failed: {e}")
 
     print("\n" + "=" * 60)
     print(f"Results: {passed}/{total} tests passed")
