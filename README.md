@@ -23,7 +23,7 @@ ExperimentStash provides a **tool-agnostic experiment orchestration system** tha
 - No proper error messages or traceback
 - Dashboard shows hanging runs that never complete
 
-**Root Cause**: 
+**Root Cause**:
 When a process is killed abruptly, the wandb context manager and signal handlers may not have time to call `wandb.finish()`, leaving the run in an open state.
 
 **Solutions**:
