@@ -1,5 +1,0 @@
-tool: manylatents
-experiment: swissroll_pca
-description: "Figure 1: PCA on Swiss roll data"
-tags: ["figure1", "pca", "swissroll", "method_comparison"]
-estimated_runtime: "30m" 

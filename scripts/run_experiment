@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Clean experiment runner that takes tool name and config name.
+Clean experiment runner that takes tool name and config path directly.
+Usage: python scripts/run_experiment <tool> <config_path>
+Example: python scripts/run_experiment manylatents figure1_method_comparison/pca_swissroll
 """
 
 import subprocess
@@ -9,165 +11,326 @@ import sys
 import os
 import argparse
 import yaml
+from pathlib import Path
 
 
-def load_configs():
-    """Load meta and runs configs."""
+def load_meta_config():
+    """Load meta config."""
     try:
         with open("configs/meta.yaml", "r") as f:
             meta_config = yaml.safe_load(f)
-        with open("configs/runs.yaml", "r") as f:
-            runs_config = yaml.safe_load(f)
-        return meta_config, runs_config
+        return meta_config
     except Exception as e:
-        print("[ERROR] Failed to load configs: {}".format(e))
-        return None, None
+        print("[ERROR] Failed to load meta config: {}".format(e))
+        return None
 
 
-def run_command(cmd, cwd=None, env=None):
-    """Run a command and return success status."""
+def load_experiment_config(config_path):
+    """Load experiment config from the given path."""
     try:
-        result = subprocess.call(cmd, cwd=cwd, env=env)
-        if result == 0:
-            print("[OK] Command executed successfully")
-            return True
-        else:
-            print("[ERROR] Command failed with exit code {}".format(result))
-            return False
+        config_file = Path("configs") / f"{config_path}.yaml"
+        if not config_file.exists():
+            print(f"[ERROR] Config file not found: {config_file}")
+            return None
+        
+        with open(config_file, "r") as f:
+            config = yaml.safe_load(f)
+        return config
     except Exception as e:
-        print("[ERROR] Command failed: {}".format(e))
-        return False
+        print(f"[ERROR] Failed to load config {config_path}: {e}")
+        return None
 
 
-def run_with_venv_activation(tool_path, cmd):
-    """Run a command with the tool's venv activated."""
-    abs_tool_path = os.path.abspath(tool_path)
-    venv_activate = os.path.join(abs_tool_path, ".venv", "bin", "activate")
+def validate_setup():
+    """Validate the experiment setup."""
+    print("Validating experiment setup...")
     
-    if not os.path.exists(venv_activate):
-        print("[ERROR] No venv found at {}".format(venv_activate))
+    # Check if configs directory exists
+    if not os.path.exists("configs"):
+        print("[ERROR] configs/ directory not found")
         return False
     
-    shell_cmd = "source {} && {}".format(venv_activate, " ".join(cmd))
-    bash_cmd = ["bash", "-c", shell_cmd]
+    # Check if meta.yaml exists
+    if not os.path.exists("configs/meta.yaml"):
+        print("[ERROR] configs/meta.yaml not found")
+        return False
     
-    return run_command(bash_cmd, cwd=abs_tool_path)
+    # Check if tools directory exists
+    if not os.path.exists("tools"):
+        print("[ERROR] tools/ directory not found")
+        return False
+    
+    print("[OK] Basic setup validation passed")
+    return True
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="Run experiments")
-    parser.add_argument("tool", help="Tool name")
-    parser.add_argument("config", help="Config name")
-    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser = argparse.ArgumentParser(
+        description="Run experiments with direct config paths",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python scripts/run_experiment manylatents figure1_method_comparison/pca_swissroll
+  python scripts/run_experiment manylatents figure1_method_comparison/umap_swissroll
+  
+Hydra debugging:
+  HYDRA_FULL_ERROR=1 python scripts/run_experiment manylatents figure1_method_comparison/pca_swissroll
+        """
+    )
+    parser.add_argument("tool", help="Tool name (e.g., manylatents)")
+    parser.add_argument("config_path", help="Config path (e.g., figure1_method_comparison/pca_swissroll)")
+    parser.add_argument("--validate-only", action="store_true", help="Only validate setup, don't run")
     
     args = parser.parse_args()
     
     try:
-        # Load configs
-        meta_config, runs_config = load_configs()
-        if not meta_config or not runs_config:
+        # Validate basic setup
+        if not validate_setup():
             sys.exit(1)
         
-        # Find the run
-        run_key = None
-        for key, run_info in runs_config.get("runs", {}).items():
-            if run_info.get("tool") == args.tool:
-                # Check if the config matches (either exact or as suffix)
-                config_path = run_info.get("config", "")
-                if config_path == args.config or config_path.endswith("/" + args.config):
-                    run_key = key
-                    break
-        
-        if not run_key:
-            print("[ERROR] No run found for tool '{}' and config '{}'".format(args.tool, args.config))
-            print("Available runs:")
-            for key, run_info in runs_config.get("runs", {}).items():
-                if run_info.get("tool") == args.tool:
-                    print("  {}: config={}".format(key, run_info.get("config")))
+        # Load meta config
+        meta_config = load_meta_config()
+        if not meta_config:
             sys.exit(1)
         
         # Get tool info
         tool_info = meta_config.get("tools", {}).get(args.tool)
         if not tool_info:
-            print("[ERROR] Tool '{}' not found in meta config".format(args.tool))
+            print(f"[ERROR] Tool '{args.tool}' not found in meta config")
+            print("Available tools:")
+            for tool_name in meta_config.get("tools", {}).keys():
+                print(f"  {tool_name}")
             sys.exit(1)
         
+        # Load experiment config
+        experiment_config = load_experiment_config(args.config_path)
+        if not experiment_config:
+            sys.exit(1)
+        
+        # Validate config
+        config_tool = experiment_config.get("tool")
+        if config_tool != args.tool:
+            print(f"[ERROR] Config specifies tool '{config_tool}' but you requested '{args.tool}'")
+            sys.exit(1)
+        
+        # Get tool path and validate
         tool_path = tool_info.get("path")
         if not tool_path or not os.path.exists(tool_path):
-            print("[ERROR] Tool path '{}' does not exist".format(tool_path))
+            print(f"[ERROR] Tool path '{tool_path}' does not exist")
             sys.exit(1)
         
-        # Check venv
-        venv_path = os.path.join(tool_path, ".venv")
-        if not os.path.exists(venv_path):
-            print("[ERROR] No venv found at {}".format(venv_path))
-            print("Please set up the tool environment first:")
-            print("cd {} && uv sync".format(tool_path))
+        # Get experiment name
+        experiment_name = experiment_config.get("experiment")
+        if not experiment_name:
+            print("[ERROR] No experiment name specified in config")
             sys.exit(1)
         
-        # Build the command - let each tool handle its own config loading
-        # The tool should know how to interpret the config path
+        # Get entrypoint
         entrypoint = tool_info.get("entrypoint")
         if not entrypoint:
-            print("[ERROR] No entrypoint found for tool '{}'".format(args.tool))
+            print(f"[ERROR] No entrypoint found for tool '{args.tool}'")
             sys.exit(1)
         
-        # Get the config path from runs.yaml
-        config_path = runs_config["runs"][run_key]["config"]
-        
-        # Load the top-level config to get the experiment name
-        import yaml
-        top_level_config_path = os.path.abspath("configs/{}.yaml".format(config_path))
-        with open(top_level_config_path, 'r') as f:
-            top_level_config = yaml.safe_load(f)
-        
-        # Get the experiment name from the top-level config
-        experiment_name = top_level_config.get("experiment")
-        if not experiment_name:
-            print("[ERROR] No experiment specified in top-level config")
-            sys.exit(1)
-        
-        # Check if tool needs external config support
-        if tool_info.get("config_path_support", False):
-            # For tools that use top-level configs as experiment organizers
-            if entrypoint.startswith("-m "):
-                # Module call with experiment name
-                module_name = entrypoint[3:]  # Remove "-m "
-                cmd = ["python", "-m", module_name, "experiment={}".format(experiment_name)]
-            else:
-                # Direct file call with experiment name
-                cmd = ["python", entrypoint, "experiment={}".format(experiment_name)]
+        # Build command
+        if entrypoint.startswith("-m "):
+            # Module call: python -m src.main
+            module_name = entrypoint[3:]  # Remove "-m "
+            cmd = ["python", "-m", module_name, f"experiment={experiment_name}"]
         else:
-            # For tools that handle config paths internally (like manylatents with Hydra)
-            config_name = config_path.split("/")[-1]  # Extract just the config name
+            # Direct file call: python src.main.py
+            cmd = ["python", entrypoint, f"experiment={experiment_name}"]
+        
+        print("=" * 60)
+        print(f"Running experiment: {experiment_name}")
+        print(f"Tool: {args.tool}")
+        print(f"Config: {args.config_path}")
+        print(f"Command: {' '.join(cmd)}")
+        print(f"Output directory: {tool_path}/outputs/")
+        print("=" * 60)
+        
+        if args.validate_only:
+            print("[INFO] Validation only mode - not running experiment")
+            return 0
+        
+        # Run the experiment
+        print("[INFO] Launching experiment...")
+        
+        # Use uv run to execute in the tool's environment
+        uv_cmd = ["uv", "run", "python"] + cmd[1:]
+        
+        # Execute the command with real-time output capture
+        try:
+            import subprocess
+            import signal
+            import time
             
-            if entrypoint.startswith("-m "):
-                # Module call: python -m src.main
-                module_name = entrypoint[3:]  # Remove "-m "
-                cmd = ["python", "-m", module_name, "experiment={}".format(config_name)]
+            process = subprocess.Popen(
+                uv_cmd, 
+                cwd=tool_path, 
+                env=os.environ.copy(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+            
+            # Set up signal handlers for graceful termination
+            def signal_handler(signum, frame):
+                print(f"\n[WARNING] Received signal {signum}, terminating experiment...")
+                if process.poll() is None:  # Process still running
+                    process.terminate()
+                    try:
+                        process.wait(timeout=10)  # Give it 10 seconds to terminate gracefully
+                    except subprocess.TimeoutExpired:
+                        print("[WARNING] Process didn't terminate gracefully, forcing kill...")
+                        process.kill()
+                        process.wait()
+                exit(1)
+            
+            # Register signal handlers
+            signal.signal(signal.SIGTERM, signal_handler)
+            signal.signal(signal.SIGINT, signal_handler)
+            
+            # Stream output in real-time with timeout
+            start_time = time.time()
+            timeout_seconds = 300  # 5 minutes
+            last_output_time = time.time()
+            memory_warning_shown = False
+            
+            while True:
+                # Check for timeout
+                if time.time() - start_time > timeout_seconds:
+                    print(f"\n[ERROR] Experiment timed out after {timeout_seconds} seconds")
+                    print("[ERROR] The experiment appears to be hanging during execution")
+                    print("[ERROR] This might be due to:")
+                    print("[ERROR] - Memory issues during evaluation")
+                    print("[ERROR] - Infinite loop in metrics computation")
+                    print("[ERROR] - Deadlock in callbacks")
+                    print("[ERROR] - Large dataset causing slow KNN computation")
+                    process.terminate()
+                    try:
+                        process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                    return 1
+                
+                # Check if process is still running
+                if process.poll() is not None:
+                    break
+                
+                # Monitor memory usage (optional)
+                try:
+                    import psutil
+                    if process.pid:
+                        proc = psutil.Process(process.pid)
+                        memory_percent = proc.memory_percent()
+                        if memory_percent > 80 and not memory_warning_shown:
+                            print(f"\n[WARNING] High memory usage detected: {memory_percent:.1f}%")
+                            print("[WARNING] Process may be killed soon due to memory pressure")
+                            print("[WARNING] Consider reducing dataset size or KNN neighbors")
+                            memory_warning_shown = True
+                except:
+                    pass  # psutil not available or process not found
+                
+                # Read output with timeout
+                try:
+                    output = process.stdout.readline()
+                    if output:
+                        print(output.rstrip())
+                        last_output_time = time.time()
+                    else:
+                        # Check if we haven't had output for a while (potential hang)
+                        if time.time() - last_output_time > 60:  # 1 minute without output
+                            print(f"\n[WARNING] No output for 60 seconds - process may be hanging")
+                            print("[WARNING] This could be due to:")
+                            print("[WARNING] - Slow KNN computation on large dataset")
+                            print("[WARNING] - Memory pressure causing slow execution")
+                            print("[WARNING] - Infinite loop in metric computation")
+                            last_output_time = time.time()  # Reset timer
+                except:
+                    break
+            
+            # Get the return code
+            return_code = process.poll()
+            
+            # Check if process was killed
+            if return_code == -9:  # SIGKILL
+                print("[ERROR] Process was killed (SIGKILL) - likely due to memory limits")
+                print("[ERROR] The experiment was terminated by the system")
+                print("[ERROR] This might be due to:")
+                print("[ERROR] - Memory usage exceeded limits")
+                print("[ERROR] - CPU time exceeded limits") 
+                print("[ERROR] - System resource constraints")
+                print("[ERROR] - Large dataset (5000 samples) causing memory pressure")
+                print("[ERROR] - KNN computation on large dataset consuming too much memory")
+                print("[WARNING] Attempting to cleanup wandb run...")
+                # Try to cleanup wandb
+                try:
+                    cleanup_result = subprocess.run(
+                        ["python3", "scripts/cleanup_wandb.py"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10
+                    )
+                    if cleanup_result.returncode == 0:
+                        print("[INFO] Wandb cleanup successful")
+                    else:
+                        print(f"[WARNING] Wandb cleanup failed: {cleanup_result.stderr}")
+                except Exception as e:
+                    print(f"[WARNING] Could not run wandb cleanup: {e}")
+                print("[INFO] Solutions:")
+                print("[INFO] - Reduce dataset size (n_distributions, n_points_per_distribution)")
+                print("[INFO] - Reduce KNN neighbors (n_neighbors in metrics)")
+                print("[INFO] - Add subsample_fraction to metrics config")
+                print("[INFO] - Use smaller batch sizes")
+                return 1
+            elif return_code == -15:  # SIGTERM
+                print("[ERROR] Process was terminated (SIGTERM)")
+                print("[INFO] This was likely a graceful termination")
+                return 1
+            elif return_code == -11:  # SIGSEGV (segmentation fault)
+                print("[ERROR] Process crashed with segmentation fault (SIGSEGV)")
+                print("[ERROR] This might be due to:")
+                print("[ERROR] - Memory corruption")
+                print("[ERROR] - Stack overflow")
+                print("[ERROR] - Invalid memory access")
+                return 1
+            elif return_code == -6:  # SIGABRT (abort)
+                print("[ERROR] Process was aborted (SIGABRT)")
+                print("[ERROR] This might be due to:")
+                print("[ERROR] - Assertion failure")
+                print("[ERROR] - Unhandled exception")
+                print("[ERROR] - Library error")
+                return 1
+            elif return_code != 0:
+                print(f"[ERROR] Process failed with exit code {return_code}")
+                print(f"[ERROR] Exit code {return_code} indicates an abnormal termination")
+                return 1
             else:
-                # Direct file call: python src/main.py
-                cmd = ["python", entrypoint, "experiment={}".format(config_name)]
-        
-        print("Running: {} with {}".format(run_key, args.tool))
-        print("Command: {}".format(" ".join(cmd)))
-        
-        success = run_with_venv_activation(tool_path, cmd)
-        
-        if success:
-            print("[OK] Experiment completed successfully")
-        else:
-            print("[ERROR] Experiment failed")
-            sys.exit(1)
+                return 0
+                
+        except subprocess.TimeoutExpired:
+            print("[ERROR] Experiment timed out after 5 minutes")
+            print("[ERROR] The experiment appears to be hanging during execution")
+            print("[ERROR] This might be due to:")
+            print("[ERROR] - Memory issues during evaluation")
+            print("[ERROR] - Infinite loop in metrics computation")
+            print("[ERROR] - Deadlock in callbacks")
+            return 1
+        except KeyboardInterrupt:
+            print("[ERROR] Experiment was interrupted by user")
+            return 1
+        except Exception as e:
+            print(f"[ERROR] Experiment failed with exception: {e}")
+            return 1
             
     except Exception as e:
-        print("[ERROR] Error: {}".format(e))
-        if args.debug:
-            import traceback
-            traceback.print_exc()
-        sys.exit(1)
+        print(f"[ERROR] Error: {e}")
+        return 1
 
 
 if __name__ == "__main__":
-    main() 
+    sys.exit(main()) 

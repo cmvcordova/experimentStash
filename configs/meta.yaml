@@ -1,12 +1,4 @@
-tools:
-  manylatents:
-    path: tools/manylatents
-    entrypoint: "-m src.main"
-    config_path_support: true
-    commit: HEAD
-    python_version: '3.9'
-    dependencies: []
-    description: ManyLatents dimensionality reduction framework
+tools: {}
 experiment:
   name: neurips3025
   description: NeurIPS 3025 submission experiments

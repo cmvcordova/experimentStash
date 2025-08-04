@@ -1,238 +1,533 @@
-# Experiment Orchestration Framework
+# ExperimentStash: Multi-Tool Experiment Orchestration Framework
 
-A clean, modular framework for orchestrating experiments across multiple tools and repositories.
+A robust, modular framework for orchestrating experiments across multiple tools and repositories with clean separation of concerns.
 
-## Overview
+## 🎯 Overview
 
-This framework provides a simple way to:
-1. **Import necessary tools as submodules**
-2. **Specify experiment configs at a top level** 
-3. **Call each tool and experiment config file in their lower level repo**
+ExperimentStash provides a **tool-agnostic experiment orchestration system** that:
+- **Imports tools as Git submodules** for version control and reproducibility
+- **Separates experiment organization from implementation** 
+- **Provides unified experiment execution** across diverse tools
+- **Handles complex dependency management** with uv environments
+- **Ensures reproducible workflows** with proper git state management
 
-## Quick Start
+## ⚠️ Known Issues
 
-### 1. Import Tools as Submodules
+### Memory Pressure with Large Datasets
 
-Add your tools as Git submodules in the `tools/` directory:
+**Issue**: Experiments with large datasets (e.g., 5000+ samples) may be killed by the system due to memory pressure during KNN computation.
+
+**Symptoms**:
+- Process gets killed with SIGKILL (-9)
+- Wandb runs remain in "running" state indefinitely
+- No error messages or traceback
+
+**Solutions**:
+1. **Reduce dataset size**: Lower `n_distributions` and `n_points_per_distribution` in data configs
+2. **Reduce KNN neighbors**: Set `n_neighbors: 5` instead of `10` in metrics
+3. **Add subsampling**: Use `subsample_fraction: 0.5` in metrics config
+4. **Use offline mode**: Set `WANDB_MODE=offline` for cluster environments
+
+**Example fix**:
+```yaml
+# Reduce dataset size
+data:
+  n_distributions: 20      # Instead of 100
+  n_points_per_distribution: 25  # Instead of 50
+
+# Reduce KNN computation
+metrics:
+  embedding:
+    knn_preservation:
+      n_neighbors: 5       # Instead of 10
+```
+
+## 🚀 Quick Start
+
+### 1. Clone and Initialize
 
 ```bash
-# Add a tool as a submodule
-git submodule add <tool-repo-url> tools/<tool-name>
+# Clone the repository
+git clone <your-repo-url>
+cd experimentstash
 
-# Initialize and update submodules
+# Initialize submodules (if any exist)
 git submodule update --init --recursive
 ```
 
-Example:
+### 2. Add Your First Tool
+
 ```bash
-git submodule add https://github.com/your-org/manylatents.git tools/manylatents
+# Use the automated tool addition script
+python3 scripts/add_tool.py <tool-name> <github-url>
+
+# Example:
+python3 scripts/add_tool.py manylatents https://github.com/cmvcordova/manyLatents.git
 ```
 
-### 2. Configure Tools in `configs/meta.yaml`
+### 3. Create Your First Experiment
 
-Register your tools in the meta configuration:
+```bash
+# Create an experiment config
+cat > configs/my_first_experiment.yaml << EOF
+tool: manylatents
+experiment: my_experiment
+description: "My first experiment"
+tags: ["demo", "test"]
+estimated_runtime: "5m"
+EOF
+
+# Run the experiment
+python3 scripts/run_experiment manylatents my_first_experiment
+```
+
+### 4. Verify Everything Works
+
+```bash
+# Check your setup
+python3 scripts/validate_setup.py
+
+# List available experiments
+python3 scripts/validate_setup.py --list-configs
+```
+
+## 📋 Core Concepts
+
+### Tool Registration
+
+Tools are registered in `configs/meta.yaml` with **critical entrypoint configuration**:
 
 ```yaml
 tools:
   manylatents:
     path: tools/manylatents
-    entrypoint: "-m src.main"
-    config_path_support: true
+    entrypoint: "-m src.main"        # ⚠️ CRITICAL: Module-style entrypoint
     commit: HEAD
     python_version: '3.9'
     dependencies: []
-    description: ManyLatents dimensionality reduction framework
+    description: 'ManyLatents dimensionality reduction framework'
 ```
 
-### 3. Specify Experiment Configs at Top Level
+### ⚠️ **ENTRYPOINT CONFIGURATION - CRITICAL**
 
-Create experiment organizers in `configs/` that point to experiments within each tool:
+The `entrypoint` field **MUST** match how your tool expects to be executed:
+
+#### **Module-Style Entrypoints (Recommended)**
+```yaml
+entrypoint: "-m src.main"           # Runs: python -m src.main
+entrypoint: "-m experiments.run"     # Runs: python -m experiments.run
+```
+
+#### **File-Style Entrypoints**
+```yaml
+entrypoint: "src/main.py"           # Runs: python src/main.py
+entrypoint: "experiments/run.py"    # Runs: python experiments/run.py
+```
+
+#### **Why This Matters**
+- **Module-style**: Allows relative imports (`from src.algorithms import ...`)
+- **File-style**: Requires absolute imports or proper PYTHONPATH setup
+- **Most Python packages work better with module-style execution**
+
+### Experiment Organization
+
+Top-level configs in `configs/` serve as **experiment organizers**:
 
 ```yaml
 # configs/figure1_method_comparison/pca_swissroll.yaml
-tool: manylatents
-experiment: swissroll_pca
+tool: manylatents                    # Which tool to use
+experiment: swissroll_pca           # Which experiment within the tool
 description: "PCA on Swiss roll data"
 tags: ["pca", "swissroll", "method_comparison"]
 estimated_runtime: "30m"
+debug: true                         # Optional debug flag
 ```
 
-### 4. Register Experiments in `configs/runs.yaml`
+## 🛠️ Tool Management
 
-Map experiment names to their config files:
+### Experiment Organization
 
-```yaml
-runs:
-  pca_swissroll:
-    tool: manylatents
-    config: figure1_method_comparison/pca_swissroll
-    description: "PCA on Swiss roll data"
-    tags: ["pca", "swissroll", "method_comparison"]
-    estimated_runtime: "30m"
-```
+Top-level configs in `configs/` serve as **experiment organizers**:
 
-### 5. Run Experiments
-
-Execute experiments using the simple command:
-
-```bash
-python scripts/run_experiment <tool> <config>
-```
-
-Examples:
-```bash
-# Run PCA on Swiss roll data
-python scripts/run_experiment manylatents pca_swissroll
-
-# Run UMAP on Swiss roll data  
-python scripts/run_experiment manylatents umap_swissroll
-
-# Run t-SNE on Swiss roll data
-python scripts/run_experiment manylatents tsne_swissroll
-```
-
-## How It Works
-
-### Top-Level Configs (Experiment Organizers)
-
-Top-level configs in `configs/` serve as **experiment organizers** that specify:
-- Which tool to use
-- Which experiment within that tool to run
-- Metadata (description, tags, runtime estimates)
-
-Example:
 ```yaml
 # configs/figure1_method_comparison/pca_swissroll.yaml
-tool: manylatents
-experiment: swissroll_pca  # Points to experiment in manylatents tool
+tool: manylatents                    # Which tool to use
+experiment: swissroll_pca           # Which experiment within the tool
 description: "PCA on Swiss roll data"
 tags: ["pca", "swissroll", "method_comparison"]
 estimated_runtime: "30m"
+debug: true                         # Optional debug flag
 ```
 
-### Tool-Level Configs (Actual Experiments)
+### Adding Tools
 
-The actual experiment configurations live within each tool's repository structure:
+#### **Automated Method (Recommended)**
+```bash
+python3 scripts/add_tool.py <tool-name> <github-url> [--branch <branch>]
+
+# Examples:
+python3 scripts/add_tool.py manylatents https://github.com/cmvcordova/manyLatents.git
+python3 scripts/add_tool.py mytool https://github.com/user/mytool.git --branch develop
+```
+
+#### **Manual Method**
+```bash
+# 1. Add as submodule
+git submodule add <github-url> tools/<tool-name>
+
+# 2. Update meta.yaml
+# Edit configs/meta.yaml to add tool configuration
+
+# 3. Set up environment
+cd tools/<tool-name> && uv sync
+```
+
+### Removing Tools
+
+```bash
+python3 scripts/remove_tool.py <tool-name>
+
+# Example:
+python3 scripts/remove_tool.py manylatents
+```
+
+**⚠️ Warning**: This will remove all references to the tool and create a backup.
+
+### Tool Configuration Schema
+
+```yaml
+tools:
+  <tool-name>:
+    path: tools/<tool-name>          # Required: Path to tool directory
+    entrypoint: "<entrypoint>"       # Required: How to run the tool
+    commit: HEAD                     # Optional: Git commit to track
+    python_version: '3.9'           # Optional: Python version
+    dependencies: []                 # Optional: Additional dependencies
+    description: 'Tool description'  # Optional: Human-readable description
+```
+
+## 🧪 Experiment Management
+
+### Creating Experiments
+
+1. **Create experiment config in your tool repository**
+2. **Create experiment organizer in `configs/`**
+3. **Run the experiment**
+
+```bash
+# Create experiment organizer
+cat > configs/my_experiment.yaml << EOF
+tool: manylatents
+experiment: my_experiment_name
+description: "My experiment description"
+tags: ["demo", "test"]
+estimated_runtime: "10m"
+EOF
+
+# Run the experiment
+python3 scripts/run_experiment manylatents my_experiment
+```
+
+### Experiment Config Schema
+
+```yaml
+tool: <tool-name>                    # Required: Which tool to use
+experiment: <experiment-name>        # Required: Experiment name within tool
+description: "Human description"     # Optional: Description
+tags: ["tag1", "tag2"]             # Optional: Tags for organization
+estimated_runtime: "30m"            # Optional: Runtime estimate
+debug: true                         # Optional: Enable debug mode
+```
+
+### Running Experiments
+
+```bash
+# Basic experiment run
+python3 scripts/run_experiment <tool> <config-path>
+
+# With debug mode
+python3 scripts/run_experiment <tool> <config-path> --debug
+
+# Validate only (don't run)
+python3 scripts/run_experiment <tool> <config-path> --validate-only
+
+# Examples:
+python3 scripts/run_experiment manylatents figure1_method_comparison/pca_swissroll
+python3 scripts/run_experiment manylatents example_manylatents --debug
+```
+
+### Experiment Outputs
+
+Experiments produce outputs in the tool's `outputs/` directory:
+
+```bash
+tools/<tool-name>/outputs/
+├── YYYY-MM-DD/
+│   └── HH-MM-SS/
+│       ├── embeddings.csv          # Embedding data
+│       ├── experiment_name.png     # Visualization plots
+│       └── wandb/                 # Wandb logs (if enabled)
+```
+
+## 📁 Directory Structure
 
 ```
-tools/manylatents/src/configs/experiment/swissroll_pca.yaml
-```
-
-This contains the full experiment configuration that the tool understands.
-
-### Execution Flow
-
-1. **User runs**: `python scripts/run_experiment manylatents pca_swissroll`
-2. **Script finds**: Run in `runs.yaml` → `figure1_method_comparison/pca_swissroll`
-3. **Script loads**: Top-level config → extracts `experiment: swissroll_pca`
-4. **Script executes**: `python -m src.main experiment=swissroll_pca` in the tool's environment
-
-## Directory Structure
-
-```
-├── configs/                    # Top-level experiment organizers
-│   ├── meta.yaml              # Tool definitions
-│   ├── runs.yaml              # Experiment mappings
-│   └── figure1_method_comparison/
+experimentstash/
+├── configs/                          # Top-level experiment organizers
+│   ├── meta.yaml                     # Tool definitions and metadata
+│   ├── example_manylatents.yaml      # Example experiment config
+│   └── figure1_method_comparison/    # Organized experiment groups
 │       ├── pca_swissroll.yaml
-│       ├── umap_swissroll.yaml
-│       └── tsne_swissroll.yaml
-├── tools/                      # Tool submodules
-│   └── manylatents/
-│       └── src/configs/experiment/
-│           ├── swissroll_pca.yaml
-│           ├── swissroll_umap.yaml
-│           └── swissroll_tsne.yaml
-└── scripts/
-    └── run_experiment         # Main experiment runner
+│       └── umap_swissroll.yaml
+├── tools/                            # Tool submodules
+│   ├── manylatents/                  # Git submodule
+│   │   ├── src/
+│   │   │   ├── main.py              # Tool entrypoint
+│   │   │   └── configs/experiment/  # Tool-specific configs
+│   │   └── pyproject.toml           # Tool dependencies
+│   └── .gitkeep
+├── scripts/                          # Framework scripts
+│   ├── add_tool.py                  # Tool addition utility
+│   ├── remove_tool.py               # Tool removal utility
+│   ├── run_experiment               # Main experiment runner
+│   └── validate_setup.py            # Setup validation
+├── outputs/                          # Experiment outputs
+├── backups/                          # Tool removal backups
+└── tests/                           # Framework tests
 ```
 
-## Adding New Tools
+## 🔧 Advanced Configuration
 
-1. **Add as submodule**:
-   ```bash
-   git submodule add <tool-repo> tools/<tool-name>
-   ```
+### Environment Management
 
-2. **Register in meta.yaml**:
-   ```yaml
-   tools:
-     <tool-name>:
-       path: tools/<tool-name>
-       entrypoint: "<entrypoint>"
-       config_path_support: true
-   ```
-
-3. **Create experiment organizers** in `configs/`
-
-4. **Register experiments** in `runs.yaml`
-
-## Adding New Experiments
-
-1. **Create experiment config** in the tool's repository
-2. **Create experiment organizer** in `configs/`
-3. **Register in runs.yaml**
-
-## Requirements
-
-- Python 3.8+
-- Git (for submodules)
-- uv (for tool environment management)
-
-## Setup
+Each tool manages its own environment using `uv`:
 
 ```bash
-# Clone with submodules
-git clone --recursive <repo-url>
+# Set up tool environment
+cd tools/<tool-name> && uv sync
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Set up tool environments
-cd tools/manylatents && uv sync
-
-# Validate your setup
-python scripts/validate_setup.py
+# Run with tool environment
+python3 scripts/run_experiment <tool> <config>
 ```
 
-## Example Workflow
+### Git State Management
+
+The framework handles complex git state management:
+
+- **Automatic cleanup** of leftover git directories
+- **Index cleanup** for submodule operations
+- **Force fallback** for stubborn git states
+- **Complete removal** with backup creation
+
+### Debugging
+
+Enable debug mode for verbose output:
 
 ```bash
-# 1. Import tool
-git submodule add https://github.com/your-org/manylatents.git tools/manylatents
+# Debug experiment run
+python3 scripts/run_experiment <tool> <config> --debug
 
-# 2. Set up tool environment
-cd tools/manylatents && uv sync
+# Debug tool addition
+python3 scripts/add_tool.py <tool> <url> --debug
 
-# 3. Create experiment organizer
-# Edit configs/figure1_method_comparison/my_experiment.yaml
-
-# 4. Register experiment
-# Edit configs/runs.yaml
-
-# 5. Run experiment
-python scripts/run_experiment manylatents my_experiment
+# Validate setup with debug
+python3 scripts/validate_setup.py --debug
 ```
 
-This framework provides a clean separation between experiment organization (top-level) and experiment implementation (tool-level), making it easy to manage complex multi-tool experiment workflows.
+## 🧪 Validation and Testing
 
-## Testing
-
-Run the validation script to ensure your setup is working correctly:
+### Setup Validation
 
 ```bash
-# Validate the entire setup
-python scripts/validate_setup.py
+# Validate entire setup
+python3 scripts/validate_setup.py
 
-# Run unit tests
+# List available configs
+python3 scripts/validate_setup.py --list-configs
+
+# Validate specific tool
+python3 scripts/validate_setup.py --tool <tool-name>
+```
+
+### Comprehensive Testing
+
+```bash
+# Run framework tests
 python -m pytest tests/
+
+# Test complete workflow
+python test_workflow.py
 ```
 
-The validation script checks:
-- ✅ Tool configurations in `meta.yaml`
-- ✅ Experiment mappings in `runs.yaml`  
-- ✅ Top-level config format and structure
-- ✅ Tool experiment existence
-- ✅ Script syntax and availability
+## 🚨 Troubleshooting
 
-This ensures that after any changes or commits, your experiment orchestration system is still functional.
+### Common Issues
+
+#### **"No module named 'src'" Error**
+**Problem**: Tool expects module-style execution but configured for file-style
+**Solution**: Update entrypoint in `configs/meta.yaml`:
+```yaml
+# Change from:
+entrypoint: "src/main.py"
+# To:
+entrypoint: "-m src.main"
+```
+
+#### **"A git directory for 'tools/...' is found locally"**
+**Problem**: Leftover git state from previous submodule operations
+**Solution**: The framework automatically handles this. If persistent:
+```bash
+rm -rf tools/<tool-name>/.git
+git rm --cached tools/<tool-name>
+python3 scripts/add_tool.py <tool> <url>
+```
+
+#### **"already exists in the index" Error**
+**Problem**: Git index still references the tool
+**Solution**: The framework automatically handles this with enhanced cleanup.
+
+#### **Process Killed (SIGKILL)**
+**Problem**: Large datasets causing memory pressure
+**Solution**: See the [Known Issues](#known-issues) section above for detailed solutions.
+
+### Debug Mode
+
+Enable debug mode for detailed error information:
+
+```bash
+python3 scripts/run_experiment <tool> <config> --debug
+```
+
+### Getting Help
+
+1. **Check the logs**: Look for error messages in the output
+2. **Validate setup**: Run `python3 scripts/validate_setup.py`
+3. **Enable debug**: Add `--debug` flag to any command
+4. **Check tool docs**: Each tool may have specific requirements
+
+## 📚 Best Practices
+
+### Tool Development
+
+1. **Use module-style entrypoints** when possible
+2. **Structure your tool with clear entry points**
+3. **Use relative imports within your tool**
+4. **Provide clear experiment naming**
+
+### Experiment Organization
+
+1. **Group related experiments** in subdirectories
+2. **Use descriptive experiment names**
+3. **Include runtime estimates** for resource planning
+4. **Add tags** for easy filtering and organization
+
+### Git Workflow
+
+1. **Commit tool changes** before adding to experimentstash
+2. **Use semantic versioning** for tool releases
+3. **Pin specific commits** for reproducibility
+4. **Test tool removal** before committing
+
+## 🔄 Workflow Examples
+
+### Complete Tool Lifecycle
+
+```bash
+# 1. Add tool
+python3 scripts/add_tool.py mytool https://github.com/user/mytool.git
+
+# 2. Create experiment
+cat > configs/my_experiment.yaml << EOF
+tool: mytool
+experiment: my_experiment
+description: "My experiment"
+tags: ["demo"]
+estimated_runtime: "5m"
+EOF
+
+# 3. Run experiment
+python3 scripts/run_experiment mytool my_experiment
+
+# 4. Remove tool (if needed)
+python3 scripts/remove_tool.py mytool
+```
+
+### Multi-Tool Experiment
+
+```bash
+# Set up multiple tools
+python3 scripts/add_tool.py tool1 https://github.com/user/tool1.git
+python3 scripts/add_tool.py tool2 https://github.com/user/tool2.git
+
+# Create experiment configs
+# configs/comparison/experiment1.yaml -> tool1
+# configs/comparison/experiment2.yaml -> tool2
+
+# Run comparison
+python3 scripts/run_experiment tool1 comparison/experiment1
+python3 scripts/run_experiment tool2 comparison/experiment2
+```
+
+## 📖 API Reference
+
+### Scripts
+
+#### `add_tool.py`
+```bash
+python3 scripts/add_tool.py <tool-name> <github-url> [--branch <branch>]
+```
+**Purpose**: Adds a tool as a Git submodule and configures it for use
+**Actions**:
+- Adds tool as submodule
+- Updates meta.yaml with tool configuration
+- Sets up uv environment for the tool
+- Creates example experiment config
+
+#### `remove_tool.py`
+```bash
+python3 scripts/remove_tool.py <tool-name> [--force]
+```
+**Purpose**: Completely removes a tool and all its references
+**Actions**:
+- Removes tool submodule
+- Cleans up metadata in meta.yaml
+- Creates backup of tool data
+- Warns about dependent configs
+
+#### `run_experiment`
+```bash
+python3 scripts/run_experiment <tool> <config-path> [--debug] [--validate-only]
+```
+**Purpose**: Executes experiments with proper error handling
+**Actions**:
+- Validates setup and configurations
+- Loads experiment configs
+- Executes experiment in tool's environment
+- Handles errors and timeouts gracefully
+
+#### `validate_setup.py`
+```bash
+python3 scripts/validate_setup.py [--list-configs] [--tool <tool>] [--debug]
+```
+**Purpose**: Validates the entire experimentStash setup
+**Actions**:
+- Validates tool configurations
+- Checks experiment mappings
+- Lists available configs
+- Reports configuration issues
+
+## 🤝 Contributing
+
+1. **Fork the repository**
+2. **Create a feature branch**
+3. **Make your changes**
+4. **Add tests**
+5. **Submit a pull request**
+
+## 📄 License
+
+[Your License Here]
+
+---
+
+**Built with ❤️ for reproducible research**

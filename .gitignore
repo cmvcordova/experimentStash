@@ -14,3 +14,22 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# ExperimentStash specific
+backups/
+outputs/
+tools/*/outputs/
+tools/*/wandb/
+tools/*/.venv/
+tools/*/__pycache__/
+tools/*/*.pyc
+tools/*/logs/
+tools/*/*.log
+
+# Environment and secrets
+.env
+*.log
+
+# Temporary files
+*.tmp
+*.temp
