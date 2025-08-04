@@ -47,7 +47,7 @@ jobs:
 
     - name: Check template integrity
       run: |
-        uv run python -c "import yaml; from pathlib import Path; meta = yaml.safe_load(open('configs/meta.yaml')); assert 'tools' in meta, 'Missing tools section'; assert 'experiment' in meta, 'Missing experiment section'; config = yaml.safe_load(open('configs/example_experiment.yaml')); assert 'tool' in config, 'Missing tool field'; assert 'experiment' in config, 'Missing experiment field'; required_dirs = ['configs', 'scripts', 'tests', 'tools', 'outputs', 'notebooks']; [assert Path(dir_name).exists() for dir_name in required_dirs]; required_scripts = ['scripts/add_tool.py', 'scripts/remove_tool.py', 'scripts/run_experiment', 'scripts/validate_setup.py', 'scripts/cleanup_wandb.py']; [assert Path(script_path).exists() for script_path in required_scripts]; print('✅ Template integrity check passed')"
+        uv run python tests/test_template_integrity.py
 
   create-release:
     needs: test

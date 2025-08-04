@@ -12,18 +12,14 @@ def test_remove_tool_help():
     """Test that the remove_tool utility shows help correctly."""
     print("Testing remove_tool help...")
 
-    try:
-        subprocess.run(
-            ["python3", "scripts/remove_tool.py", "--help"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        print("✓ Remove tool help works")
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"✗ Remove tool help failed: {e.stderr}")
-        return False
+    result = subprocess.run(
+        ["python3", "scripts/remove_tool.py", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, f"Remove tool help failed: {result.stderr}"
+    print("✓ Remove tool help works")
 
 
 def test_remove_tool_validation():
@@ -31,23 +27,14 @@ def test_remove_tool_validation():
     print("\nTesting remove_tool validation...")
 
     # Test with non-existent tool
-    try:
-        result = subprocess.run(
-            ["python3", "scripts/remove_tool.py", "non-existent-tool"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0:
-            print("✓ Remove tool correctly rejected non-existent tool")
-        else:
-            print("✗ Remove tool should have rejected non-existent tool")
-            return False
-    except Exception as e:
-        print(f"✗ Remove tool validation test failed: {e}")
-        return False
-
-    return True
+    result = subprocess.run(
+        ["python3", "scripts/remove_tool.py", "non-existent-tool"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0, "Remove tool should have rejected non-existent tool"
+    print("✓ Remove tool correctly rejected non-existent tool")
 
 
 def test_remove_tool_structure():
@@ -55,26 +42,16 @@ def test_remove_tool_structure():
     print("\nTesting remove_tool script structure...")
 
     script_path = Path("scripts/remove_tool.py")
-    if not script_path.exists():
-        print("✗ Remove tool script not found")
-        return False
+    assert script_path.exists(), "Remove tool script not found"
 
     # Test that script can be imported (syntax check)
-    try:
-        result = subprocess.run(
-            ["python3", "-m", "py_compile", str(script_path)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            print("✓ Remove tool script syntax is valid")
-            return True
-        else:
-            print(f"✗ Remove tool script has syntax errors: {result.stderr}")
-            return False
-    except Exception as e:
-        print(f"✗ Failed to test remove tool script: {e}")
-        return False
+    result = subprocess.run(
+        ["python3", "-m", "py_compile", str(script_path)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"Remove tool script has syntax errors: {result.stderr}"
+    print("✓ Remove tool script syntax is valid")
 
 
 def main():

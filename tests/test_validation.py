@@ -34,13 +34,9 @@ def test_meta_yaml_structure() -> None:
 
     # Check validation section
     validation = meta_config["validation"]
-    assert (
-        "require_commit_pins" in validation
-    ), "Missing 'require_commit_pins' in validation"
+    assert "require_commit_pins" in validation, "Missing 'require_commit_pins' in validation"
     assert "validate_configs" in validation, "Missing 'validate_configs' in validation"
-    assert (
-        "check_dependencies" in validation
-    ), "Missing 'check_dependencies' in validation"
+    assert "check_dependencies" in validation, "Missing 'check_dependencies' in validation"
 
 
 def test_example_experiment_config() -> None:
@@ -56,14 +52,10 @@ def test_example_experiment_config() -> None:
     assert "experiment" in config, "Missing 'experiment' in example_experiment.yaml"
     assert "description" in config, "Missing 'description' in example_experiment.yaml"
     assert "tags" in config, "Missing 'tags' in example_experiment.yaml"
-    assert (
-        "estimated_runtime" in config
-    ), "Missing 'estimated_runtime' in example_experiment.yaml"
+    assert "estimated_runtime" in config, "Missing 'estimated_runtime' in example_experiment.yaml"
 
     # Check that tool is example_tool
-    assert (
-        config["tool"] == "example_tool"
-    ), "Tool should be 'example_tool' in example_experiment.yaml"
+    assert config["tool"] == "example_tool", "Tool should be 'example_tool' in example_experiment.yaml"
 
 
 def test_directory_structure() -> None:
@@ -102,9 +94,7 @@ def test_config_loading() -> None:
 
     # Test that both configs are valid YAML
     assert isinstance(meta_config, dict), "meta.yaml should be a dictionary"
-    assert isinstance(
-        example_config, dict
-    ), "example_experiment.yaml should be a dictionary"
+    assert isinstance(example_config, dict), "example_experiment.yaml should be a dictionary"
 
     # Test that example config references a tool
     tool_name = example_config.get("tool")

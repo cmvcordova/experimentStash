@@ -13,50 +13,36 @@ def test_validation():
     """Test the validation script."""
     print("Testing validation script...")
 
-    try:
-        subprocess.run(
-            ["python3", "scripts/validate_setup.py", "--skip-tool-tests"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        print("✓ Validation script works")
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"✗ Validation script failed: {e.stderr}")
-        return False
+    result = subprocess.run(
+        ["python3", "scripts/validate_setup.py", "--skip-tool-tests"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, f"Validation script failed: {result.stderr}"
+    print("✓ Validation script works")
 
 
 def test_config_loading():
     """Test that configs can be loaded."""
     print("\nTesting config loading...")
 
-    try:
-        # Test meta.yaml
-        with open("configs/meta.yaml", "r") as f:
-            yaml.safe_load(f)
-        print("✓ meta.yaml loaded successfully")
+    # Test meta.yaml
+    with open("configs/meta.yaml", "r") as f:
+        yaml.safe_load(f)
+    print("✓ meta.yaml loaded successfully")
 
-        # Test example experiment config
-        config_file = Path("configs/example_experiment.yaml")
-        with open(config_file, "r") as f:
-            config = yaml.safe_load(f)
-        print("✓ Example experiment config loaded successfully")
+    # Test example experiment config
+    config_file = Path("configs/example_experiment.yaml")
+    with open(config_file, "r") as f:
+        config = yaml.safe_load(f)
+    print("✓ Example experiment config loaded successfully")
 
-        # Validate config structure
-        required_fields = ["tool", "experiment"]
-        for field in required_fields:
-            if field in config:
-                print(f"✓ Found required field: {field}")
-            else:
-                print(f"✗ Missing required field: {field}")
-                return False
-
-        return True
-
-    except Exception as e:
-        print(f"✗ Config loading failed: {e}")
-        return False
+    # Validate config structure
+    required_fields = ["tool", "experiment"]
+    for field in required_fields:
+        assert field in config, f"Missing required field: {field}"
+        print(f"✓ Found required field: {field}")
 
 
 def test_run_experiment_script():
@@ -64,26 +50,16 @@ def test_run_experiment_script():
     print("\nTesting run_experiment script...")
 
     script_path = Path("scripts/run_experiment")
-    if not script_path.exists():
-        print("✗ run_experiment script not found")
-        return False
+    assert script_path.exists(), "run_experiment script not found"
 
     # Test that script can be imported (syntax check)
-    try:
-        result = subprocess.run(
-            ["python3", "-m", "py_compile", str(script_path)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            print("✓ run_experiment script syntax is valid")
-            return True
-        else:
-            print(f"✗ run_experiment script has syntax errors: {result.stderr}")
-            return False
-    except Exception as e:
-        print(f"✗ Failed to test run_experiment script: {e}")
-        return False
+    result = subprocess.run(
+        ["python3", "-m", "py_compile", str(script_path)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"run_experiment script has syntax errors: {result.stderr}"
+    print("✓ run_experiment script syntax is valid")
 
 
 def test_add_tool_script():
@@ -91,26 +67,16 @@ def test_add_tool_script():
     print("\nTesting add_tool script...")
 
     script_path = Path("scripts/add_tool.py")
-    if not script_path.exists():
-        print("✗ add_tool.py script not found")
-        return False
+    assert script_path.exists(), "add_tool.py script not found"
 
     # Test that script can be imported (syntax check)
-    try:
-        result = subprocess.run(
-            ["python3", "-m", "py_compile", str(script_path)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            print("✓ add_tool.py script syntax is valid")
-            return True
-        else:
-            print(f"✗ add_tool.py script has syntax errors: {result.stderr}")
-            return False
-    except Exception as e:
-        print(f"✗ Failed to test add_tool.py script: {e}")
-        return False
+    result = subprocess.run(
+        ["python3", "-m", "py_compile", str(script_path)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"add_tool.py script has syntax errors: {result.stderr}"
+    print("✓ add_tool.py script syntax is valid")
 
 
 def test_remove_tool_script():
@@ -118,26 +84,16 @@ def test_remove_tool_script():
     print("\nTesting remove_tool script...")
 
     script_path = Path("scripts/remove_tool.py")
-    if not script_path.exists():
-        print("✗ remove_tool.py script not found")
-        return False
+    assert script_path.exists(), "remove_tool.py script not found"
 
     # Test that script can be imported (syntax check)
-    try:
-        result = subprocess.run(
-            ["python3", "-m", "py_compile", str(script_path)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            print("✓ remove_tool.py script syntax is valid")
-            return True
-        else:
-            print(f"✗ remove_tool.py script has syntax errors: {result.stderr}")
-            return False
-    except Exception as e:
-        print(f"✗ Failed to test remove_tool.py script: {e}")
-        return False
+    result = subprocess.run(
+        ["python3", "-m", "py_compile", str(script_path)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"remove_tool.py script has syntax errors: {result.stderr}"
+    print("✓ remove_tool.py script syntax is valid")
 
 
 def test_directory_structure():
@@ -146,15 +102,10 @@ def test_directory_structure():
 
     required_dirs = ["configs", "notebooks", "outputs", "tools", "scripts"]
 
-    all_exist = True
     for dir_name in required_dirs:
-        if Path(dir_name).exists():
-            print(f"✓ Directory exists: {dir_name}")
-        else:
-            print(f"✗ Directory missing: {dir_name}")
-            all_exist = False
-
-    return all_exist
+        dir_path = Path(dir_name)
+        assert dir_path.exists(), f"Directory missing: {dir_name}"
+        print(f"✓ Directory exists: {dir_name}")
 
 
 def main():
