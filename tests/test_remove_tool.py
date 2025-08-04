@@ -50,7 +50,9 @@ def test_remove_tool_structure():
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, f"Remove tool script has syntax errors: {result.stderr}"
+    assert (
+        result.returncode == 0
+    ), f"Remove tool script has syntax errors: {result.stderr}"
     print("✓ Remove tool script syntax is valid")
 
 

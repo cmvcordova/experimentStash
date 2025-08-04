@@ -58,7 +58,9 @@ def test_run_experiment_script():
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, f"run_experiment script has syntax errors: {result.stderr}"
+    assert (
+        result.returncode == 0
+    ), f"run_experiment script has syntax errors: {result.stderr}"
     print("✓ run_experiment script syntax is valid")
 
 
@@ -75,7 +77,9 @@ def test_add_tool_script():
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, f"add_tool.py script has syntax errors: {result.stderr}"
+    assert (
+        result.returncode == 0
+    ), f"add_tool.py script has syntax errors: {result.stderr}"
     print("✓ add_tool.py script syntax is valid")
 
 
@@ -92,7 +96,9 @@ def test_remove_tool_script():
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, f"remove_tool.py script has syntax errors: {result.stderr}"
+    assert (
+        result.returncode == 0
+    ), f"remove_tool.py script has syntax errors: {result.stderr}"
     print("✓ remove_tool.py script syntax is valid")
 
 
