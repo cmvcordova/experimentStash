@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-Tests for core functionality validation.
+Test script to verify experimentStash validation.
 """
 
-from pathlib import Path
 import yaml
-import os
+from pathlib import Path
 
 
 def test_run_experiment_script_exists() -> None:
@@ -15,125 +14,132 @@ def test_run_experiment_script_exists() -> None:
 
 
 def test_meta_yaml_structure() -> None:
-    """Test that meta.yaml has the correct structure for core functionality."""
-    with open("configs/meta.yaml", "r") as f:
-        meta = yaml.safe_load(f)
+    """Test that meta.yaml has the correct structure."""
+    meta_path = Path("configs/meta.yaml")
+    assert meta_path.exists(), "meta.yaml not found"
 
-    # Check required top-level sections
-    assert "tools" in meta, "Missing 'tools' section"
-    assert "experiment" in meta, "Missing 'experiment' section"
-    assert "validation" in meta, "Missing 'validation' section"
+    with open(meta_path, "r") as f:
+        meta_config = yaml.safe_load(f)
 
-    # Check that tools section has at least one tool
-    assert len(meta["tools"]) > 0, "No tools defined in meta.yaml"
+    # Check required top-level keys
+    assert "tools" in meta_config, "Missing 'tools' in meta.yaml"
+    assert "experiment" in meta_config, "Missing 'experiment' in meta.yaml"
+    assert "validation" in meta_config, "Missing 'validation' in meta.yaml"
 
-    # Check that manylatents tool exists (our core tool)
-    assert "manylatents" in meta["tools"], "manylatents tool not found in meta.yaml"
+    # Check experiment section
+    experiment = meta_config["experiment"]
+    assert "name" in experiment, "Missing 'name' in experiment section"
+    assert "description" in experiment, "Missing 'description' in experiment section"
+    assert "authors" in experiment, "Missing 'authors' in experiment section"
 
-    # Check tool structure
-    manylatents = meta["tools"]["manylatents"]
-    assert "path" in manylatents, "manylatents tool missing 'path'"
-    assert "entrypoint" in manylatents, "manylatents tool missing 'entrypoint'"
-    assert "config_path_support" in manylatents, "manylatents tool missing 'config_path_support'"
-    assert manylatents["config_path_support"] is True, "manylatents config_path_support should be True"
-
-
-def test_runs_yaml_structure() -> None:
-    """Test that runs.yaml has the correct structure."""
-    with open("configs/runs.yaml", "r") as f:
-        runs = yaml.safe_load(f)
-
-    assert "runs" in runs, "Missing 'runs' section"
-    assert len(runs["runs"]) > 0, "No runs defined in runs.yaml"
-
-    # Check that at least one run references manylatents tool
-    has_manylatents = any(
-        run_config.get("tool") == "manylatents" for run_config in runs["runs"].values()
-    )
-    assert has_manylatents, "No runs reference manylatents tool"
+    # Check validation section
+    validation = meta_config["validation"]
+    assert (
+        "require_commit_pins" in validation
+    ), "Missing 'require_commit_pins' in validation"
+    assert "validate_configs" in validation, "Missing 'validate_configs' in validation"
+    assert (
+        "check_dependencies" in validation
+    ), "Missing 'check_dependencies' in validation"
 
 
-def test_top_level_configs_format() -> None:
-    """Test that top-level configs are in the correct format."""
-    config_dir = Path("configs/figure1_method_comparison")
-    assert config_dir.exists(), "figure1_method_comparison config directory not found"
+def test_example_experiment_config() -> None:
+    """Test that the example experiment config is valid."""
+    config_path = Path("configs/example_experiment.yaml")
+    assert config_path.exists(), "example_experiment.yaml not found"
 
-    # Check each config file
-    for config_file in config_dir.glob("*.yaml"):
-        if config_file.name == ".gitkeep":
-            continue
-            
-        with open(config_file, "r") as f:
-            config = yaml.safe_load(f)
-        
-        # Check required fields
-        assert "tool" in config, f"Missing 'tool' in {config_file.name}"
-        assert "experiment" in config, f"Missing 'experiment' in {config_file.name}"
-        assert "description" in config, f"Missing 'description' in {config_file.name}"
-        assert "tags" in config, f"Missing 'tags' in {config_file.name}"
-        assert "estimated_runtime" in config, f"Missing 'estimated_runtime' in {config_file.name}"
-        
-        # Check that tool is manylatents
-        assert config["tool"] == "manylatents", f"Tool should be 'manylatents' in {config_file.name}"
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
 
+    # Check required fields
+    assert "tool" in config, "Missing 'tool' in example_experiment.yaml"
+    assert "experiment" in config, "Missing 'experiment' in example_experiment.yaml"
+    assert "description" in config, "Missing 'description' in example_experiment.yaml"
+    assert "tags" in config, "Missing 'tags' in example_experiment.yaml"
+    assert (
+        "estimated_runtime" in config
+    ), "Missing 'estimated_runtime' in example_experiment.yaml"
 
-def test_tool_experiments_exist() -> None:
-    """Test that the experiments referenced in top-level configs exist in the tool."""
-    config_dir = Path("configs/figure1_method_comparison")
-    tool_experiment_dir = Path("tools/manylatents/src/configs/experiment")
-    
-    assert tool_experiment_dir.exists(), "Tool experiment directory not found"
-    
-    # Check each top-level config
-    for config_file in config_dir.glob("*.yaml"):
-        if config_file.name == ".gitkeep":
-            continue
-            
-        with open(config_file, "r") as f:
-            config = yaml.safe_load(f)
-        
-        experiment_name = config["experiment"]
-        experiment_file = tool_experiment_dir / f"{experiment_name}.yaml"
-        
-        assert experiment_file.exists(), f"Experiment {experiment_name} not found in tool"
+    # Check that tool is example_tool
+    assert (
+        config["tool"] == "example_tool"
+    ), "Tool should be 'example_tool' in example_experiment.yaml"
 
 
-def test_run_experiment_config_loading() -> None:
-    """Test that the run_experiment script can load configs properly."""
-    # This test simulates the config loading logic from run_experiment
-    import yaml
-    
+def test_directory_structure() -> None:
+    """Test that all required directories exist."""
+    required_dirs = ["configs", "scripts", "tests", "tools", "outputs", "notebooks"]
+
+    for dir_name in required_dirs:
+        dir_path = Path(dir_name)
+        assert dir_path.exists(), f"Required directory '{dir_name}' not found"
+
+
+def test_script_files_exist() -> None:
+    """Test that all required script files exist."""
+    required_scripts = [
+        "scripts/add_tool.py",
+        "scripts/remove_tool.py",
+        "scripts/run_experiment",
+        "scripts/validate_setup.py",
+        "scripts/cleanup_wandb.py",
+    ]
+
+    for script_path in required_scripts:
+        path = Path(script_path)
+        assert path.exists(), f"Required script '{script_path}' not found"
+
+
+def test_config_loading() -> None:
+    """Test that configs can be loaded properly."""
     # Load meta config
     with open("configs/meta.yaml", "r") as f:
         meta_config = yaml.safe_load(f)
-    
-    # Load runs config
-    with open("configs/runs.yaml", "r") as f:
-        runs_config = yaml.safe_load(f)
-    
-    # Test finding a run
-    run_key = None
-    for key, run_info in runs_config.get("runs", {}).items():
-        if run_info.get("tool") == "manylatents":
-            config_path = run_info.get("config", "")
-            if config_path.endswith("/pca_swissroll"):
-                run_key = key
-                break
-    
-    assert run_key is not None, "Could not find pca_swissroll run"
-    
-    # Test loading top-level config
-    config_path = runs_config["runs"][run_key]["config"]
-    top_level_config_path = f"configs/{config_path}.yaml"
-    
-    assert os.path.exists(top_level_config_path), f"Top-level config not found: {top_level_config_path}"
-    
-    with open(top_level_config_path, "r") as f:
-        top_level_config = yaml.safe_load(f)
-    
-    experiment_name = top_level_config.get("experiment")
-    assert experiment_name is not None, "No experiment specified in top-level config"
-    
-    # Test that the experiment exists in the tool
-    tool_experiment_file = f"tools/manylatents/src/configs/experiment/{experiment_name}.yaml"
-    assert os.path.exists(tool_experiment_file), f"Tool experiment not found: {tool_experiment_file}"
+
+    # Load example experiment config
+    with open("configs/example_experiment.yaml", "r") as f:
+        example_config = yaml.safe_load(f)
+
+    # Test that both configs are valid YAML
+    assert isinstance(meta_config, dict), "meta.yaml should be a dictionary"
+    assert isinstance(
+        example_config, dict
+    ), "example_experiment.yaml should be a dictionary"
+
+    # Test that example config references a tool
+    tool_name = example_config.get("tool")
+    assert tool_name is not None, "Example config should specify a tool"
+    assert isinstance(tool_name, str), "Tool name should be a string"
+
+
+if __name__ == "__main__":
+    print("Running validation tests...")
+
+    tests = [
+        test_run_experiment_script_exists,
+        test_meta_yaml_structure,
+        test_example_experiment_config,
+        test_directory_structure,
+        test_script_files_exist,
+        test_config_loading,
+    ]
+
+    passed = 0
+    total = len(tests)
+
+    for test in tests:
+        try:
+            test()
+            print(f"✓ {test.__name__}")
+            passed += 1
+        except Exception as e:
+            print(f"✗ {test.__name__}: {e}")
+
+    print(f"\nResults: {passed}/{total} tests passed")
+
+    if passed == total:
+        print("🎉 All validation tests passed!")
+        exit(0)
+    else:
+        print("❌ Some validation tests failed")
+        exit(1)

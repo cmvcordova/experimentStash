@@ -7,6 +7,7 @@ Usage: python scripts/cleanup_wandb.py
 import wandb
 import sys
 
+
 def cleanup_wandb():
     """Force cleanup of any active wandb runs."""
     try:
@@ -21,5 +22,6 @@ def cleanup_wandb():
         return 1
     return 0
 
+
 if __name__ == "__main__":
-    sys.exit(cleanup_wandb()) 
+    sys.exit(cleanup_wandb())

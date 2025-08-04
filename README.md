@@ -6,41 +6,42 @@ A robust, modular framework for orchestrating experiments across multiple tools 
 
 ExperimentStash provides a **tool-agnostic experiment orchestration system** that:
 - **Imports tools as Git submodules** for version control and reproducibility
-- **Separates experiment organization from implementation** 
+- **Separates experiment organization from implementation**
 - **Provides unified experiment execution** across diverse tools
 - **Handles complex dependency management** with uv environments
 - **Ensures reproducible workflows** with proper git state management
 
 ## ⚠️ Known Issues
 
-### Memory Pressure with Large Datasets
+### Process Termination and Wandb State Management
 
-**Issue**: Experiments with large datasets (e.g., 5000+ samples) may be killed by the system due to memory pressure during KNN computation.
+**Issue**: When processes are killed by the system (due to memory limits, wall time, or other resource constraints), wandb runs may remain in "running" state indefinitely instead of being properly marked as failed.
 
 **Symptoms**:
-- Process gets killed with SIGKILL (-9)
+- Process gets killed with SIGKILL (-9) or SIGTERM (-15)
 - Wandb runs remain in "running" state indefinitely
-- No error messages or traceback
+- No proper error messages or traceback
+- Dashboard shows hanging runs that never complete
+
+**Root Cause**: 
+When a process is killed abruptly, the wandb context manager and signal handlers may not have time to call `wandb.finish()`, leaving the run in an open state.
 
 **Solutions**:
-1. **Reduce dataset size**: Lower `n_distributions` and `n_points_per_distribution` in data configs
-2. **Reduce KNN neighbors**: Set `n_neighbors: 5` instead of `10` in metrics
-3. **Add subsampling**: Use `subsample_fraction: 0.5` in metrics config
-4. **Use offline mode**: Set `WANDB_MODE=offline` for cluster environments
+1. **Use offline mode**: Set `WANDB_MODE=offline` for cluster environments
+   ```bash
+   export WANDB_MODE=offline
+   python3 scripts/run_experiment <tool> <config>
+   ```
+2. **Sync runs after completion**: Use `wandb sync` to close offline runs
+   ```bash
+   wandb sync --sync-all tools/<tool-name>/wandb/
+   ```
+3. **Request grace period**: Ask your cluster admin for SLURM grace periods
+   ```bash
+   #SBATCH --signal=TERM@90  # 90 second grace period
+   ```
 
-**Example fix**:
-```yaml
-# Reduce dataset size
-data:
-  n_distributions: 20      # Instead of 100
-  n_points_per_distribution: 25  # Instead of 50
-
-# Reduce KNN computation
-metrics:
-  embedding:
-    knn_preservation:
-      n_neighbors: 5       # Instead of 10
-```
+**Note**: The framework includes signal handling and wandb cleanup mechanisms, but these may not work if the process is killed immediately without a grace period.
 
 ## 🚀 Quick Start
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script to verify the plugin utility works correctly.
+Test script for add_tool.py functionality.
 """
 
 import subprocess
@@ -8,128 +8,127 @@ import sys
 from pathlib import Path
 
 
-def test_plugin_help():
-    """Test that the plugin utility shows help correctly."""
-    print("Testing plugin help...")
-    
+def test_add_tool_help():
+    """Test that the add_tool utility shows help correctly."""
+    print("Testing add_tool help...")
+
     try:
-        result = subprocess.run(
-            ["python", "scripts/plugin.py", "--help"],
+        subprocess.run(
+            ["python3", "scripts/add_tool.py", "--help"],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
-        print("✓ Plugin help works")
+        print("✓ Add tool help works")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"✗ Plugin help failed: {e.stderr}")
+        print(f"✗ Add tool help failed: {e.stderr}")
         return False
 
 
-def test_plugin_validation():
-    """Test that the plugin utility validates inputs correctly."""
-    print("\nTesting plugin validation...")
-    
+def test_add_tool_validation():
+    """Test that the add_tool utility validates inputs correctly."""
+    print("\nTesting add_tool validation...")
+
     # Test with invalid tool name
     try:
         result = subprocess.run(
-            ["python", "scripts/plugin.py", "invalid-tool!", "https://github.com/user/tool.git"],
+            [
+                "python3",
+                "scripts/add_tool.py",
+                "invalid-tool!",
+                "https://github.com/user/tool.git",
+            ],
             capture_output=True,
             text=True,
-            check=False
+            check=False,
         )
         if result.returncode != 0:
-            print("✓ Plugin correctly rejected invalid tool name")
+            print("✓ Add tool correctly rejected invalid tool name")
         else:
-            print("✗ Plugin should have rejected invalid tool name")
+            print("✗ Add tool should have rejected invalid tool name")
             return False
     except Exception as e:
-        print(f"✗ Plugin validation test failed: {e}")
+        print(f"✗ Add tool validation test failed: {e}")
         return False
-    
+
     # Test with invalid GitHub URL
     try:
         result = subprocess.run(
-            ["python", "scripts/plugin.py", "valid-tool", "not-a-github-url"],
+            ["python3", "scripts/add_tool.py", "valid-tool", "not-a-github-url"],
             capture_output=True,
             text=True,
-            check=False
+            check=False,
         )
         if result.returncode != 0:
-            print("✓ Plugin correctly rejected invalid GitHub URL")
+            print("✓ Add tool correctly rejected invalid GitHub URL")
         else:
-            print("✗ Plugin should have rejected invalid GitHub URL")
+            print("✗ Add tool should have rejected invalid GitHub URL")
             return False
     except Exception as e:
-        print(f"✗ Plugin validation test failed: {e}")
+        print(f"✗ Add tool validation test failed: {e}")
         return False
-    
+
     return True
 
 
-def test_plugin_structure():
-    """Test that the plugin script has correct structure."""
-    print("\nTesting plugin script structure...")
-    
-    plugin_path = Path("scripts/plugin.py")
-    if not plugin_path.exists():
-        print("✗ Plugin script not found")
+def test_add_tool_structure():
+    """Test that the add_tool script has correct structure."""
+    print("\nTesting add_tool script structure...")
+
+    script_path = Path("scripts/add_tool.py")
+    if not script_path.exists():
+        print("✗ Add tool script not found")
         return False
-    
+
     # Test that script can be imported (syntax check)
     try:
         result = subprocess.run(
-            ["python", "-m", "py_compile", str(plugin_path)],
+            ["python3", "-m", "py_compile", str(script_path)],
             capture_output=True,
-            text=True
+            text=True,
         )
         if result.returncode == 0:
-            print("✓ Plugin script syntax is valid")
+            print("✓ Add tool script syntax is valid")
             return True
         else:
-            print(f"✗ Plugin script has syntax errors: {result.stderr}")
+            print(f"✗ Add tool script has syntax errors: {result.stderr}")
             return False
     except Exception as e:
-        print(f"✗ Failed to test plugin script: {e}")
+        print(f"✗ Failed to test add tool script: {e}")
         return False
 
 
 def main():
-    """Run all plugin tests."""
+    """Run all add_tool tests."""
     print("=" * 60)
-    print("Plugin Utility Test")
+    print("Add Tool Utility Test")
     print("=" * 60)
-    
+
     tests = [
-        test_plugin_help,
-        test_plugin_validation,
-        test_plugin_structure,
+        test_add_tool_help,
+        test_add_tool_validation,
+        test_add_tool_structure,
     ]
-    
-    results = []
+
+    passed = 0
+    total = len(tests)
+
     for test in tests:
-        try:
-            result = test()
-            results.append(result)
-        except Exception as e:
-            print(f"✗ Test failed with exception: {e}")
-            results.append(False)
-    
+        if test():
+            passed += 1
+
     print("\n" + "=" * 60)
-    passed = sum(results)
-    total = len(results)
-    
+    print(f"Results: {passed}/{total} tests passed")
+    print("=" * 60)
+
     if passed == total:
-        print("✓ All plugin tests passed!")
-        print("\nThe plugin utility is ready to use!")
-        print("\nTry it out:")
-        print("python scripts/plugin.py <tool_name> <github_url>")
+        print("🎉 All tests passed!")
         return 0
     else:
-        print(f"✗ {total - passed} out of {total} plugin tests failed")
-        print("\nPlease fix the issues above before using the plugin.")
+        print("❌ Some tests failed")
         return 1
 
 
 if __name__ == "__main__":
-    sys.exit(main()) 
+    sys.exit(main())

@@ -3,4 +3,4 @@ experiment: example_experiment
 description: "Example experiment configuration"
 tags: ["example", "template"]
 estimated_runtime: "5m"
-debug: true 
+debug: true

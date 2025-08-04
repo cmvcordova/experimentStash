@@ -6,7 +6,6 @@ Usage: python scripts/run_experiment <tool> <config_path>
 Example: python scripts/run_experiment manylatents figure1_method_comparison/pca_swissroll
 """
 
-import subprocess
 import sys
 import os
 import argparse
@@ -32,7 +31,7 @@ def load_experiment_config(config_path):
         if not config_file.exists():
             print(f"[ERROR] Config file not found: {config_file}")
             return None
-        
+
         with open(config_file, "r") as f:
             config = yaml.safe_load(f)
         return config
@@ -44,22 +43,22 @@ def load_experiment_config(config_path):
 def validate_setup():
     """Validate the experiment setup."""
     print("Validating experiment setup...")
-    
+
     # Check if configs directory exists
     if not os.path.exists("configs"):
         print("[ERROR] configs/ directory not found")
         return False
-    
+
     # Check if meta.yaml exists
     if not os.path.exists("configs/meta.yaml"):
         print("[ERROR] configs/meta.yaml not found")
         return False
-    
+
     # Check if tools directory exists
     if not os.path.exists("tools"):
         print("[ERROR] tools/ directory not found")
         return False
-    
+
     print("[OK] Basic setup validation passed")
     return True
 
@@ -73,27 +72,32 @@ def main():
 Examples:
   python scripts/run_experiment manylatents figure1_method_comparison/pca_swissroll
   python scripts/run_experiment manylatents figure1_method_comparison/umap_swissroll
-  
+
 Hydra debugging:
   HYDRA_FULL_ERROR=1 python scripts/run_experiment manylatents figure1_method_comparison/pca_swissroll
-        """
+        """,
     )
     parser.add_argument("tool", help="Tool name (e.g., manylatents)")
-    parser.add_argument("config_path", help="Config path (e.g., figure1_method_comparison/pca_swissroll)")
-    parser.add_argument("--validate-only", action="store_true", help="Only validate setup, don't run")
-    
+    parser.add_argument(
+        "config_path",
+        help="Config path (e.g., figure1_method_comparison/pca_swissroll)",
+    )
+    parser.add_argument(
+        "--validate-only", action="store_true", help="Only validate setup, don't run"
+    )
+
     args = parser.parse_args()
-    
+
     try:
         # Validate basic setup
         if not validate_setup():
             sys.exit(1)
-        
+
         # Load meta config
         meta_config = load_meta_config()
         if not meta_config:
             sys.exit(1)
-        
+
         # Get tool info
         tool_info = meta_config.get("tools", {}).get(args.tool)
         if not tool_info:
@@ -102,36 +106,38 @@ Hydra debugging:
             for tool_name in meta_config.get("tools", {}).keys():
                 print(f"  {tool_name}")
             sys.exit(1)
-        
+
         # Load experiment config
         experiment_config = load_experiment_config(args.config_path)
         if not experiment_config:
             sys.exit(1)
-        
+
         # Validate config
         config_tool = experiment_config.get("tool")
         if config_tool != args.tool:
-            print(f"[ERROR] Config specifies tool '{config_tool}' but you requested '{args.tool}'")
+            print(
+                f"[ERROR] Config specifies tool '{config_tool}' but you requested '{args.tool}'"
+            )
             sys.exit(1)
-        
+
         # Get tool path and validate
         tool_path = tool_info.get("path")
         if not tool_path or not os.path.exists(tool_path):
             print(f"[ERROR] Tool path '{tool_path}' does not exist")
             sys.exit(1)
-        
+
         # Get experiment name
         experiment_name = experiment_config.get("experiment")
         if not experiment_name:
             print("[ERROR] No experiment name specified in config")
             sys.exit(1)
-        
+
         # Get entrypoint
         entrypoint = tool_info.get("entrypoint")
         if not entrypoint:
             print(f"[ERROR] No entrypoint found for tool '{args.tool}'")
             sys.exit(1)
-        
+
         # Build command
         if entrypoint.startswith("-m "):
             # Module call: python -m src.main
@@ -140,7 +146,7 @@ Hydra debugging:
         else:
             # Direct file call: python src.main.py
             cmd = ["python", entrypoint, f"experiment={experiment_name}"]
-        
+
         print("=" * 60)
         print(f"Running experiment: {experiment_name}")
         print(f"Tool: {args.tool}")
@@ -148,62 +154,72 @@ Hydra debugging:
         print(f"Command: {' '.join(cmd)}")
         print(f"Output directory: {tool_path}/outputs/")
         print("=" * 60)
-        
+
         if args.validate_only:
             print("[INFO] Validation only mode - not running experiment")
             return 0
-        
+
         # Run the experiment
         print("[INFO] Launching experiment...")
-        
+
         # Use uv run to execute in the tool's environment
         uv_cmd = ["uv", "run", "python"] + cmd[1:]
-        
+
         # Execute the command with real-time output capture
         try:
             import subprocess
             import signal
             import time
-            
+
             process = subprocess.Popen(
-                uv_cmd, 
-                cwd=tool_path, 
+                uv_cmd,
+                cwd=tool_path,
                 env=os.environ.copy(),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                universal_newlines=True
+                universal_newlines=True,
             )
-            
+
             # Set up signal handlers for graceful termination
             def signal_handler(signum, frame):
-                print(f"\n[WARNING] Received signal {signum}, terminating experiment...")
+                print(
+                    f"\n[WARNING] Received signal {signum}, terminating experiment..."
+                )
                 if process.poll() is None:  # Process still running
                     process.terminate()
                     try:
-                        process.wait(timeout=10)  # Give it 10 seconds to terminate gracefully
+                        process.wait(
+                            timeout=10
+                        )  # Give it 10 seconds to terminate gracefully
                     except subprocess.TimeoutExpired:
-                        print("[WARNING] Process didn't terminate gracefully, forcing kill...")
+                        print(
+                            "[WARNING] Process didn't terminate gracefully, forcing kill..."
+                        )
                         process.kill()
                         process.wait()
                 exit(1)
-            
+
             # Register signal handlers
             signal.signal(signal.SIGTERM, signal_handler)
             signal.signal(signal.SIGINT, signal_handler)
-            
+
             # Stream output in real-time with timeout
             start_time = time.time()
             timeout_seconds = 300  # 5 minutes
             last_output_time = time.time()
             memory_warning_shown = False
-            
+
             while True:
                 # Check for timeout
                 if time.time() - start_time > timeout_seconds:
-                    print(f"\n[ERROR] Experiment timed out after {timeout_seconds} seconds")
-                    print("[ERROR] The experiment appears to be hanging during execution")
+                    print(
+                        f"\n[ERROR] Experiment timed out after {timeout_seconds} seconds"
+                    )
+                    print(
+                        "[ERROR] The experiment appears to be hanging during execution"
+                    )
                     print("[ERROR] This might be due to:")
                     print("[ERROR] - Memory issues during evaluation")
                     print("[ERROR] - Infinite loop in metrics computation")
@@ -216,25 +232,32 @@ Hydra debugging:
                         process.kill()
                         process.wait()
                     return 1
-                
+
                 # Check if process is still running
                 if process.poll() is not None:
                     break
-                
+
                 # Monitor memory usage (optional)
                 try:
                     import psutil
+
                     if process.pid:
                         proc = psutil.Process(process.pid)
                         memory_percent = proc.memory_percent()
                         if memory_percent > 80 and not memory_warning_shown:
-                            print(f"\n[WARNING] High memory usage detected: {memory_percent:.1f}%")
-                            print("[WARNING] Process may be killed soon due to memory pressure")
-                            print("[WARNING] Consider reducing dataset size or KNN neighbors")
+                            print(
+                                f"\n[WARNING] High memory usage detected: {memory_percent:.1f}%"
+                            )
+                            print(
+                                "[WARNING] Process may be killed soon due to memory pressure"
+                            )
+                            print(
+                                "[WARNING] Consider reducing dataset size or KNN neighbors"
+                            )
                             memory_warning_shown = True
-                except:
+                except Exception:
                     pass  # psutil not available or process not found
-                
+
                 # Read output with timeout
                 try:
                     output = process.stdout.readline()
@@ -243,29 +266,37 @@ Hydra debugging:
                         last_output_time = time.time()
                     else:
                         # Check if we haven't had output for a while (potential hang)
-                        if time.time() - last_output_time > 60:  # 1 minute without output
-                            print(f"\n[WARNING] No output for 60 seconds - process may be hanging")
+                        if (
+                            time.time() - last_output_time > 60
+                        ):  # 1 minute without output
+                            print(
+                                "\n[WARNING] No output for 60 seconds - process may be hanging"
+                            )
                             print("[WARNING] This could be due to:")
                             print("[WARNING] - Slow KNN computation on large dataset")
                             print("[WARNING] - Memory pressure causing slow execution")
                             print("[WARNING] - Infinite loop in metric computation")
                             last_output_time = time.time()  # Reset timer
-                except:
+                except Exception:
                     break
-            
+
             # Get the return code
             return_code = process.poll()
-            
+
             # Check if process was killed
             if return_code == -9:  # SIGKILL
-                print("[ERROR] Process was killed (SIGKILL) - likely due to memory limits")
+                print(
+                    "[ERROR] Process was killed (SIGKILL) - likely due to memory limits"
+                )
                 print("[ERROR] The experiment was terminated by the system")
                 print("[ERROR] This might be due to:")
                 print("[ERROR] - Memory usage exceeded limits")
-                print("[ERROR] - CPU time exceeded limits") 
+                print("[ERROR] - CPU time exceeded limits")
                 print("[ERROR] - System resource constraints")
                 print("[ERROR] - Large dataset (5000 samples) causing memory pressure")
-                print("[ERROR] - KNN computation on large dataset consuming too much memory")
+                print(
+                    "[ERROR] - KNN computation on large dataset consuming too much memory"
+                )
                 print("[WARNING] Attempting to cleanup wandb run...")
                 # Try to cleanup wandb
                 try:
@@ -273,16 +304,20 @@ Hydra debugging:
                         ["python3", "scripts/cleanup_wandb.py"],
                         capture_output=True,
                         text=True,
-                        timeout=10
+                        timeout=10,
                     )
                     if cleanup_result.returncode == 0:
                         print("[INFO] Wandb cleanup successful")
                     else:
-                        print(f"[WARNING] Wandb cleanup failed: {cleanup_result.stderr}")
+                        print(
+                            f"[WARNING] Wandb cleanup failed: {cleanup_result.stderr}"
+                        )
                 except Exception as e:
                     print(f"[WARNING] Could not run wandb cleanup: {e}")
                 print("[INFO] Solutions:")
-                print("[INFO] - Reduce dataset size (n_distributions, n_points_per_distribution)")
+                print(
+                    "[INFO] - Reduce dataset size (n_distributions, n_points_per_distribution)"
+                )
                 print("[INFO] - Reduce KNN neighbors (n_neighbors in metrics)")
                 print("[INFO] - Add subsample_fraction to metrics config")
                 print("[INFO] - Use smaller batch sizes")
@@ -307,11 +342,13 @@ Hydra debugging:
                 return 1
             elif return_code != 0:
                 print(f"[ERROR] Process failed with exit code {return_code}")
-                print(f"[ERROR] Exit code {return_code} indicates an abnormal termination")
+                print(
+                    f"[ERROR] Exit code {return_code} indicates an abnormal termination"
+                )
                 return 1
             else:
                 return 0
-                
+
         except subprocess.TimeoutExpired:
             print("[ERROR] Experiment timed out after 5 minutes")
             print("[ERROR] The experiment appears to be hanging during execution")
@@ -326,11 +363,11 @@ Hydra debugging:
         except Exception as e:
             print(f"[ERROR] Experiment failed with exception: {e}")
             return 1
-            
+
     except Exception as e:
         print(f"[ERROR] Error: {e}")
         return 1
 
 
 if __name__ == "__main__":
-    sys.exit(main()) 
+    sys.exit(main())

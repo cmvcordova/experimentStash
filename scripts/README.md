@@ -10,7 +10,7 @@ python scripts/add_tool.py <tool_name> <github_url>
 ```
 **Adds new tools to your experimentStash** - fully automated setup with dependency management.
 
-### `remove_tool.py` - Remove Tools  
+### `remove_tool.py` - Remove Tools
 ```bash
 python scripts/remove_tool.py <tool_name>
 ```
@@ -60,4 +60,4 @@ python scripts/validate_setup.py
 - All scripts support `--help` for usage information
 - Scripts are designed to be run from the experimentStash root directory
 - Error handling and validation are built into each script
-- Experiment outputs are saved to `tools/<tool_name>/outputs/` 
+- Experiment outputs are saved to `tools/<tool_name>/outputs/`
