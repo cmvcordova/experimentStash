@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,26 +28,29 @@ jobs:
       run: |
         uv sync --extra dev
 
-    - name: Run tests
+    - name: Run framework tests
       run: |
-        pytest -v
+        uv run python tests/test_workflow.py
 
-    - name: Run validation
+    - name: Run validation tests
       run: |
-        python scripts/validate_configs.py
+        uv run python tests/test_validation.py
 
-    - name: Build package
+    - name: Test all scripts
       run: |
-        uv build
+        uv run python tests/test_add_tool.py
+        uv run python tests/test_remove_tool.py
 
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: dist
-        path: dist/
+    - name: Validate setup
+      run: |
+        uv run python scripts/validate_setup.py
 
-  publish:
-    needs: build
+    - name: Check template integrity
+      run: |
+        uv run python -c "import yaml; from pathlib import Path; meta = yaml.safe_load(open('configs/meta.yaml')); assert 'tools' in meta, 'Missing tools section'; assert 'experiment' in meta, 'Missing experiment section'; config = yaml.safe_load(open('configs/example_experiment.yaml')); assert 'tool' in config, 'Missing tool field'; assert 'experiment' in config, 'Missing experiment field'; required_dirs = ['configs', 'scripts', 'tests', 'tools', 'outputs', 'notebooks']; [assert Path(dir_name).exists() for dir_name in required_dirs]; required_scripts = ['scripts/add_tool.py', 'scripts/remove_tool.py', 'scripts/run_experiment', 'scripts/validate_setup.py', 'scripts/cleanup_wandb.py']; [assert Path(script_path).exists() for script_path in required_scripts]; print('✅ Template integrity check passed')"
+
+  create-release:
+    needs: test
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
 
@@ -56,23 +59,43 @@ jobs:
       with:
         submodules: recursive
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        python-version: "3.11"
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        body: |
+          ## 🎉 ExperimentStash Template Release
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v1
-      with:
-        version: latest
+          This release includes:
+          - ✅ Framework scripts for tool management
+          - ✅ Robust experiment execution with error handling
+          - ✅ Signal handling for SLURM environments
+          - ✅ Comprehensive documentation and troubleshooting
+          - ✅ Validation and testing infrastructure
+          - ✅ Clean template structure for collaboration
 
-    - name: Download build artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: dist
-        path: dist/
+          ## 🚀 Quick Start
 
-    - name: Publish to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        password: ${{ secrets.PYPI_API_TOKEN }}
+          ```bash
+          # Clone the template
+          git clone <your-repo-url>
+          cd experimentstash
+
+          # Add your first tool
+          python3 scripts/add_tool.py <tool-name> <github-url>
+
+          # Create an experiment
+          # Edit configs/example_experiment.yaml
+
+          # Run the experiment
+          python3 scripts/run_experiment <tool> <config>
+          ```
+
+          ## 📚 Documentation
+
+          See the [README.md](README.md) for comprehensive documentation.
+        draft: false
+        prerelease: false

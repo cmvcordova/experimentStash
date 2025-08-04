@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
@@ -40,13 +40,29 @@ jobs:
       run: |
         uv run pre-commit run --all-files
 
-    - name: Run tests
+    - name: Run framework tests
       run: |
-        uv run pytest -v
+        uv run python tests/test_workflow.py
 
-    - name: Run validation
+    - name: Run validation tests
       run: |
-        uv run python scripts/validate_configs.py --skip-tool-tests
+        uv run python tests/test_validation.py
+
+    - name: Test add_tool script
+      run: |
+        uv run python tests/test_add_tool.py
+
+    - name: Test remove_tool script
+      run: |
+        uv run python tests/test_remove_tool.py
+
+    - name: Test script syntax
+      run: |
+        uv run python -m py_compile scripts/add_tool.py
+        uv run python -m py_compile scripts/remove_tool.py
+        uv run python -m py_compile scripts/run_experiment
+        uv run python -m py_compile scripts/validate_setup.py
+        uv run python -m py_compile scripts/cleanup_wandb.py
 
   lint:
     runs-on: ubuntu-latest
@@ -75,8 +91,6 @@ jobs:
         uv run ruff check --config ruff.toml
         uv run ruff format --check
 
-
-
   validate:
     runs-on: ubuntu-latest
 
@@ -99,10 +113,14 @@ jobs:
       run: |
         uv sync --extra dev
 
-    - name: Validate configurations
+    - name: Validate setup
       run: |
-        uv run python scripts/validate_configs.py
+        uv run python scripts/validate_setup.py
 
-    - name: Test hello-world tool
+    - name: Test example experiment config
       run: |
-        uv run python tools/hello-world/src/main.py --config-name hello_world
+        uv run python -c "import yaml; from pathlib import Path; meta = yaml.safe_load(open('configs/meta.yaml')); assert 'tools' in meta, 'Missing tools section'; assert 'experiment' in meta, 'Missing experiment section'; config = yaml.safe_load(open('configs/example_experiment.yaml')); assert 'tool' in config, 'Missing tool field'; assert 'experiment' in config, 'Missing experiment field'; print('✅ All configs are valid')"
+
+    - name: Test directory structure
+      run: |
+        uv run python -c "from pathlib import Path; required_dirs = ['configs', 'scripts', 'tests', 'tools', 'outputs', 'notebooks']; [assert Path(dir_name).exists() for dir_name in required_dirs]; required_scripts = ['scripts/add_tool.py', 'scripts/remove_tool.py', 'scripts/run_experiment', 'scripts/validate_setup.py', 'scripts/cleanup_wandb.py']; [assert Path(script_path).exists() for script_path in required_scripts]; print('✅ All required files and directories exist')"
