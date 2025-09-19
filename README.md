@@ -1,343 +1,222 @@
-# ExperimentStash: Multi-Tool Experiment Orchestration Framework
+# ExperimentStash: General-Purpose Hydra Tool Orchestrator
 
-A robust, modular framework for orchestrating experiments across multiple tools and repositories with clean separation of concerns.
+A simple, powerful framework for orchestrating experiments across any Hydra-based tools with clean separation of concerns.
 
 ## 🎯 Overview
 
 ExperimentStash provides a **tool-agnostic experiment orchestration system** that:
-- **Imports tools as Git submodules** for version control and reproducibility
-- **Separates experiment organization from implementation**
-- **Provides unified experiment execution** across diverse tools
-- **Handles complex dependency management** with uv environments
-- **Ensures reproducible workflows** with proper git state management
+- **Works with any Hydra-based tool** without modification
+- **Keeps experiment configs at the top level** for easy organization
+- **Maintains complete separation** between orchestrator and tools
+- **Provides unified execution interface** across diverse tools
+- **Ensures reproducible workflows** with proper environment management
 
-## ⚠️ Known Issues
+## ✨ Key Features
 
-### Process Termination and Wandb State Management
-
-**Issue**: When processes are killed by the system (due to memory limits, wall time, or other resource constraints), wandb runs may remain in "running" state indefinitely instead of being properly marked as failed.
-
-**Symptoms**:
-- Process gets killed with SIGKILL (-9) or SIGTERM (-15)
-- Wandb runs remain in "running" state indefinitely
-- No proper error messages or traceback
-- Dashboard shows hanging runs that never complete
-
-**Root Cause**:
-When a process is killed abruptly, the wandb context manager and signal handlers may not have time to call `wandb.finish()`, leaving the run in an open state.
-
-**Solutions**:
-1. **Use offline mode**: Set `WANDB_MODE=offline` for cluster environments
-   ```bash
-   export WANDB_MODE=offline
-   python3 scripts/run_experiment <tool> <config>
-   ```
-2. **Sync runs after completion**: Use `wandb sync` to close offline runs
-   ```bash
-   wandb sync --sync-all tools/<tool-name>/wandb/
-   ```
-3. **Request grace period**: Ask your cluster admin for SLURM grace periods
-   ```bash
-   #SBATCH --signal=TERM@90  # 90 second grace period
-   ```
-
-**Note**: The framework includes signal handling and wandb cleanup mechanisms, but these may not work if the process is killed immediately without a grace period.
+- 🔧 **Zero-Configuration Tool Integration**: Works with any Hydra tool out of the box
+- 📁 **Clean Architecture**: Top-level configs, isolated tool environments
+- 🔄 **Reproducible Environments**: Each tool has its own `uv`-managed environment
+- 🎛️ **Unified Interface**: Same command structure for all tools
+- 📊 **Built-in Validation**: Comprehensive setup and config validation
+- 🧪 **Template Ready**: Includes working test tool for immediate use
 
 ## 🚀 Quick Start
 
-### 1. Clone and Initialize
+### 1. Test the Template
+
+The repository includes a working test tool to verify integration:
 
 ```bash
-# Clone the repository
-git clone <your-repo-url>
-cd experimentstash
+# Test the framework immediately
+python3 scripts/run_experiment hydra-test-tool test_integration
 
-# Initialize submodules (if any exist)
-git submodule update --init --recursive
+# Validate setup
+python3 scripts/run_experiment hydra-test-tool test_integration --validate-only
 ```
 
-### 2. Add Your First Tool
-
-```bash
-# Use the automated tool addition script
-python3 scripts/add_tool.py <tool-name> <github-url>
-
-# Example:
-python3 scripts/add_tool.py manylatents https://github.com/cmvcordova/manyLatents.git
+**Expected Output:**
+```
+🎉 SUCCESS: Hydra integration working!
+📝 Message from config: Hello from top-level ExperimentStash config! Integration working perfectly!
+✅ Top-level configs integrated successfully!
 ```
 
-### 3. Create Your First Experiment
+### 2. Add Your Own Tool
 
 ```bash
-# Create an experiment config
-cat > configs/my_first_experiment.yaml << EOF
-tool: manylatents
-experiment: my_experiment
+# Option A: Add existing tool as git submodule
+git submodule add <your-tool-repo-url> tools/<tool-name>
+cd tools/<tool-name> && uv sync
+
+# Option B: Copy/create your tool in tools/ directory
+mkdir tools/my-hydra-tool
+# ... set up your tool ...
+```
+
+### 3. Register Your Tool
+
+Edit `configs/meta.yaml`:
+
+```yaml
+tools:
+  my-hydra-tool:
+    path: tools/my-hydra-tool
+    entrypoint: src/main.py  # or "-m src.main" for module-style
+    description: "My awesome Hydra-based tool"
+```
+
+### 4. Create Experiment Config
+
+```yaml
+# configs/my_experiment.yaml
+tool: my-hydra-tool
+experiment: my_experiment_name
 description: "My first experiment"
 tags: ["demo", "test"]
 estimated_runtime: "5m"
-EOF
 
-# Run the experiment
-python3 scripts/run_experiment manylatents my_first_experiment
+# Your experiment parameters here
+message: "Hello from my experiment!"
+params:
+  learning_rate: 0.001
+  batch_size: 32
 ```
 
-### 4. Verify Everything Works
+### 5. Run Your Experiment
 
 ```bash
-# Check your setup
-python3 scripts/validate_setup.py
-
-# List available experiments
-python3 scripts/validate_setup.py --list-configs
+python3 scripts/run_experiment my-hydra-tool my_experiment
 ```
 
-## 📋 Core Concepts
+## 📋 Core Architecture
 
-### Tool Registration
-
-Tools are registered in `configs/meta.yaml` with **critical entrypoint configuration**:
-
-```yaml
-tools:
-  manylatents:
-    path: tools/manylatents
-    entrypoint: "-m src.main"        # ⚠️ CRITICAL: Module-style entrypoint
-    commit: HEAD
-    python_version: '3.9'
-    dependencies: []
-    description: 'ManyLatents dimensionality reduction framework'
-```
-
-### ⚠️ **ENTRYPOINT CONFIGURATION - CRITICAL**
-
-The `entrypoint` field **MUST** match how your tool expects to be executed:
-
-#### **Module-Style Entrypoints (Recommended)**
-```yaml
-entrypoint: "-m src.main"           # Runs: python -m src.main
-entrypoint: "-m experiments.run"     # Runs: python -m experiments.run
-```
-
-#### **File-Style Entrypoints**
-```yaml
-entrypoint: "src/main.py"           # Runs: python src/main.py
-entrypoint: "experiments/run.py"    # Runs: python experiments/run.py
-```
-
-#### **Why This Matters**
-- **Module-style**: Allows relative imports (`from src.algorithms import ...`)
-- **File-style**: Requires absolute imports or proper PYTHONPATH setup
-- **Most Python packages work better with module-style execution**
-
-### Experiment Organization
-
-Top-level configs in `configs/` serve as **experiment organizers**:
-
-```yaml
-# configs/figure1_method_comparison/pca_swissroll.yaml
-tool: manylatents                    # Which tool to use
-experiment: swissroll_pca           # Which experiment within the tool
-description: "PCA on Swiss roll data"
-tags: ["pca", "swissroll", "method_comparison"]
-estimated_runtime: "30m"
-debug: true                         # Optional debug flag
-```
-
-## 🛠️ Tool Management
-
-### Experiment Organization
-
-Top-level configs in `configs/` serve as **experiment organizers**:
-
-```yaml
-# configs/figure1_method_comparison/pca_swissroll.yaml
-tool: manylatents                    # Which tool to use
-experiment: swissroll_pca           # Which experiment within the tool
-description: "PCA on Swiss roll data"
-tags: ["pca", "swissroll", "method_comparison"]
-estimated_runtime: "30m"
-debug: true                         # Optional debug flag
-```
-
-### Adding Tools
-
-#### **Automated Method (Recommended)**
-```bash
-python3 scripts/add_tool.py <tool-name> <github-url> [--branch <branch>]
-
-# Examples:
-python3 scripts/add_tool.py manylatents https://github.com/cmvcordova/manyLatents.git
-python3 scripts/add_tool.py mytool https://github.com/user/mytool.git --branch develop
-```
-
-#### **Manual Method**
-```bash
-# 1. Add as submodule
-git submodule add <github-url> tools/<tool-name>
-
-# 2. Update meta.yaml
-# Edit configs/meta.yaml to add tool configuration
-
-# 3. Set up environment
-cd tools/<tool-name> && uv sync
-```
-
-### Removing Tools
-
-```bash
-python3 scripts/remove_tool.py <tool-name>
-
-# Example:
-python3 scripts/remove_tool.py manylatents
-```
-
-**⚠️ Warning**: This will remove all references to the tool and create a backup.
-
-### Tool Configuration Schema
-
-```yaml
-tools:
-  <tool-name>:
-    path: tools/<tool-name>          # Required: Path to tool directory
-    entrypoint: "<entrypoint>"       # Required: How to run the tool
-    commit: HEAD                     # Optional: Git commit to track
-    python_version: '3.9'           # Optional: Python version
-    dependencies: []                 # Optional: Additional dependencies
-    description: 'Tool description'  # Optional: Human-readable description
-```
-
-## 🧪 Experiment Management
-
-### Creating Experiments
-
-1. **Create experiment config in your tool repository**
-2. **Create experiment organizer in `configs/`**
-3. **Run the experiment**
-
-```bash
-# Create experiment organizer
-cat > configs/my_experiment.yaml << EOF
-tool: manylatents
-experiment: my_experiment_name
-description: "My experiment description"
-tags: ["demo", "test"]
-estimated_runtime: "10m"
-EOF
-
-# Run the experiment
-python3 scripts/run_experiment manylatents my_experiment
-```
-
-### Experiment Config Schema
-
-```yaml
-tool: <tool-name>                    # Required: Which tool to use
-experiment: <experiment-name>        # Required: Experiment name within tool
-description: "Human description"     # Optional: Description
-tags: ["tag1", "tag2"]             # Optional: Tags for organization
-estimated_runtime: "30m"            # Optional: Runtime estimate
-debug: true                         # Optional: Enable debug mode
-```
-
-### Running Experiments
-
-```bash
-# Basic experiment run
-python3 scripts/run_experiment <tool> <config-path>
-
-# With debug mode
-python3 scripts/run_experiment <tool> <config-path> --debug
-
-# Validate only (don't run)
-python3 scripts/run_experiment <tool> <config-path> --validate-only
-
-# Examples:
-python3 scripts/run_experiment manylatents figure1_method_comparison/pca_swissroll
-python3 scripts/run_experiment manylatents example_manylatents --debug
-```
-
-### Experiment Outputs
-
-Experiments produce outputs in the tool's `outputs/` directory:
-
-```bash
-tools/<tool-name>/outputs/
-├── YYYY-MM-DD/
-│   └── HH-MM-SS/
-│       ├── embeddings.csv          # Embedding data
-│       ├── experiment_name.png     # Visualization plots
-│       └── wandb/                 # Wandb logs (if enabled)
-```
-
-## 📁 Directory Structure
+### Clean Separation of Concerns
 
 ```
 experimentstash/
-├── configs/                          # Top-level experiment organizers
-│   ├── meta.yaml                     # Tool definitions and metadata
-│   ├── example_manylatents.yaml      # Example experiment config
-│   └── figure1_method_comparison/    # Organized experiment groups
-│       ├── pca_swissroll.yaml
-│       └── umap_swissroll.yaml
-├── tools/                            # Tool submodules
-│   ├── manylatents/                  # Git submodule
-│   │   ├── src/
-│   │   │   ├── main.py              # Tool entrypoint
-│   │   │   └── configs/experiment/  # Tool-specific configs
-│   │   └── pyproject.toml           # Tool dependencies
-│   └── .gitkeep
-├── scripts/                          # Framework scripts
-│   ├── add_tool.py                  # Tool addition utility
-│   ├── remove_tool.py               # Tool removal utility
-│   ├── run_experiment               # Main experiment runner
-│   └── validate_setup.py            # Setup validation
-├── outputs/                          # Experiment outputs
-├── backups/                          # Tool removal backups
-└── tests/                           # Framework tests
+├── configs/                    # 🎯 Top-level experiment definitions
+│   ├── meta.yaml              # Tool registry
+│   ├── test_integration.yaml  # Example working config
+│   └── my_experiment.yaml     # Your experiment configs
+├── tools/                     # 🔧 Isolated tool environments
+│   ├── hydra-test-tool/       # Example minimal Hydra tool
+│   └── my-hydra-tool/         # Your Hydra-based tools
+└── scripts/                   # 🛠️ Orchestration scripts
+    └── run_experiment         # Main experiment runner
 ```
 
-## 🔧 Advanced Configuration
+### How It Works
 
-### Environment Management
+1. **Top-level configs** define what experiment to run and with which tool
+2. **Tools** are self-contained Hydra applications with their own environments
+3. **Orchestrator** passes the top-level config directly to the tool via Hydra's standard flags
+4. **No coupling** between orchestrator and tool internals
 
-Each tool manages its own environment using `uv`:
+## 🛠️ Tool Integration
+
+### Requirements for Tools
+
+Your Hydra-based tool needs:
+
+1. **Hydra main function** that accepts configs
+2. **Proper entrypoint** (file or module)
+3. **uv-compatible dependencies** (pyproject.toml/requirements.txt)
+
+### Example Minimal Tool
+
+```python
+# tools/my-tool/src/main.py
+import hydra
+from omegaconf import DictConfig
+
+@hydra.main(version_base=None, config_path=None, config_name=None)
+def main(cfg: DictConfig) -> None:
+    print(f"Running experiment: {cfg.get('experiment', 'Unknown')}")
+    print(f"Message: {cfg.get('message', 'No message')}")
+
+    # Your tool logic here
+    for key, value in cfg.get('params', {}).items():
+        print(f"  {key}: {value}")
+
+if __name__ == "__main__":
+    main()
+```
+
+### Tool Registration
+
+```yaml
+# configs/meta.yaml
+tools:
+  my-tool:
+    path: tools/my-tool
+    entrypoint: src/main.py        # File-style: python src/main.py
+    # OR
+    entrypoint: "-m src.main"      # Module-style: python -m src.main
+    description: "Description of my tool"
+```
+
+**Choosing Entrypoint Style:**
+- **File-style** (`src/main.py`): Simple, works for standalone scripts
+- **Module-style** (`-m src.main`): Better for packages with relative imports
+
+## 🧪 Experiment Configuration
+
+### Basic Structure
+
+```yaml
+# Required fields
+tool: my-tool                    # Which tool to use
+experiment: experiment_name      # Identifier for your experiment
+
+# Optional metadata
+description: "Human-readable description"
+tags: ["tag1", "tag2"]          # For organization
+estimated_runtime: "30m"        # Planning aid
+
+# Your experiment parameters (passed directly to tool)
+message: "Hello from config!"
+params:
+  learning_rate: 0.001
+  model_type: "transformer"
+  data:
+    batch_size: 32
+    dataset: "my_dataset"
+```
+
+### Parameter Passing
+
+Everything in your config (except the orchestrator fields) gets passed directly to your tool via Hydra:
+
+```yaml
+# This config...
+tool: my-tool
+experiment: test
+custom_param: "hello"
+nested:
+  value: 42
+
+# Becomes accessible in your tool as:
+# cfg.custom_param == "hello"
+# cfg.nested.value == 42
+```
+
+## 🔧 Command Reference
+
+### Run Experiments
 
 ```bash
-# Set up tool environment
-cd tools/<tool-name> && uv sync
+# Basic run
+python3 scripts/run_experiment <tool> <config-name>
 
-# Run with tool environment
-python3 scripts/run_experiment <tool> <config>
+# Validate setup only
+python3 scripts/run_experiment <tool> <config-name> --validate-only
+
+# Examples
+python3 scripts/run_experiment hydra-test-tool test_integration
+python3 scripts/run_experiment my-tool my_experiment --validate-only
 ```
 
-### Git State Management
-
-The framework handles complex git state management:
-
-- **Automatic cleanup** of leftover git directories
-- **Index cleanup** for submodule operations
-- **Force fallback** for stubborn git states
-- **Complete removal** with backup creation
-
-### Debugging
-
-Enable debug mode for verbose output:
-
-```bash
-# Debug experiment run
-python3 scripts/run_experiment <tool> <config> --debug
-
-# Debug tool addition
-python3 scripts/add_tool.py <tool> <url> --debug
-
-# Validate setup with debug
-python3 scripts/validate_setup.py --debug
-```
-
-## 🧪 Validation and Testing
-
-### Setup Validation
+### Validation
 
 ```bash
 # Validate entire setup
@@ -346,189 +225,172 @@ python3 scripts/validate_setup.py
 # List available configs
 python3 scripts/validate_setup.py --list-configs
 
-# Validate specific tool
+# Check specific tool
 python3 scripts/validate_setup.py --tool <tool-name>
 ```
 
-### Comprehensive Testing
+## 📁 Directory Organization
 
-```bash
-# Run framework tests
-python -m pytest tests/
+### Organizing Experiments
 
-# Test complete workflow
-python test_workflow.py
+Create subdirectories in `configs/` for related experiments:
+
+```
+configs/
+├── meta.yaml
+├── test_integration.yaml
+├── paper_experiments/
+│   ├── figure1_comparison.yaml
+│   ├── figure2_ablation.yaml
+│   └── table1_metrics.yaml
+├── development/
+│   ├── quick_test.yaml
+│   └── debug_config.yaml
+└── production/
+    ├── final_model.yaml
+    └── benchmark.yaml
+```
+
+Run with paths: `python3 scripts/run_experiment my-tool paper_experiments/figure1_comparison`
+
+### Tool Directory Structure
+
+```
+tools/my-tool/
+├── pyproject.toml         # Dependencies
+├── uv.lock               # Locked environment
+├── src/
+│   ├── main.py           # Entry point
+│   ├── algorithms/       # Tool code
+│   └── utils/
+└── .venv/                # Isolated environment
 ```
 
 ## 🚨 Troubleshooting
 
 ### Common Issues
 
-#### **"No module named 'src'" Error**
-**Problem**: Tool expects module-style execution but configured for file-style
-**Solution**: Update entrypoint in `configs/meta.yaml`:
-```yaml
-# Change from:
-entrypoint: "src/main.py"
-# To:
-entrypoint: "-m src.main"
-```
+#### "Tool not found in meta config"
+**Problem**: Tool not registered in `configs/meta.yaml`
+**Solution**: Add tool entry to meta.yaml
 
-#### **"A git directory for 'tools/...' is found locally"**
-**Problem**: Leftover git state from previous submodule operations
-**Solution**: The framework automatically handles this. If persistent:
+#### "Config file not found"
+**Problem**: Config path doesn't match file location
+**Solution**: Check that `configs/<config-name>.yaml` exists
+
+#### "No module named X" Error
+**Problem**: Wrong entrypoint style or missing dependencies
+**Solution**:
+- Check entrypoint in meta.yaml (file vs module style)
+- Ensure tool dependencies are installed: `cd tools/<tool> && uv sync`
+
+#### Tool Environment Issues
+**Problem**: Dependencies not installed or conflicting versions
+**Solution**:
 ```bash
-rm -rf tools/<tool-name>/.git
-git rm --cached tools/<tool-name>
-python3 scripts/add_tool.py <tool> <url>
+cd tools/<tool-name>
+rm -rf .venv uv.lock
+uv sync
 ```
-
-#### **"already exists in the index" Error**
-**Problem**: Git index still references the tool
-**Solution**: The framework automatically handles this with enhanced cleanup.
-
-#### **Process Killed (SIGKILL)**
-**Problem**: Large datasets causing memory pressure
-**Solution**: See the [Known Issues](#known-issues) section above for detailed solutions.
 
 ### Debug Mode
 
-Enable debug mode for detailed error information:
+Add debug information to see what's happening:
 
 ```bash
-python3 scripts/run_experiment <tool> <config> --debug
+# See full command construction and execution
+HYDRA_FULL_ERROR=1 python3 scripts/run_experiment <tool> <config> --validate-only
 ```
 
-### Getting Help
-
-1. **Check the logs**: Look for error messages in the output
-2. **Validate setup**: Run `python3 scripts/validate_setup.py`
-3. **Enable debug**: Add `--debug` flag to any command
-4. **Check tool docs**: Each tool may have specific requirements
-
-## 📚 Best Practices
+## 🎯 Best Practices
 
 ### Tool Development
-
-1. **Use module-style entrypoints** when possible
-2. **Structure your tool with clear entry points**
-3. **Use relative imports within your tool**
-4. **Provide clear experiment naming**
+1. **Keep tools self-contained** with their own dependencies
+2. **Use Hydra's config system** for maximum flexibility
+3. **Test tools independently** before adding to orchestrator
+4. **Use semantic versioning** for tool releases
 
 ### Experiment Organization
-
 1. **Group related experiments** in subdirectories
-2. **Use descriptive experiment names**
+2. **Use descriptive names** and tags
 3. **Include runtime estimates** for resource planning
-4. **Add tags** for easy filtering and organization
+4. **Document experiment purposes** in descriptions
 
-### Git Workflow
+### Configuration Management
+1. **Keep configs minimal** - only specify what you need to change
+2. **Use consistent naming** across related experiments
+3. **Version control your configs** along with results
+4. **Test configs with validate-only** before running
 
-1. **Commit tool changes** before adding to experimentstash
-2. **Use semantic versioning** for tool releases
-3. **Pin specific commits** for reproducibility
-4. **Test tool removal** before committing
+## 🔄 Example Workflows
 
-## 🔄 Workflow Examples
-
-### Complete Tool Lifecycle
+### Adding a New Tool
 
 ```bash
-# 1. Add tool
-python3 scripts/add_tool.py mytool https://github.com/user/mytool.git
+# 1. Add tool to repository
+git submodule add https://github.com/user/my-tool.git tools/my-tool
 
-# 2. Create experiment
-cat > configs/my_experiment.yaml << EOF
-tool: mytool
-experiment: my_experiment
-description: "My experiment"
-tags: ["demo"]
-estimated_runtime: "5m"
+# 2. Set up environment
+cd tools/my-tool && uv sync && cd ../..
+
+# 3. Register in meta.yaml
+# Edit configs/meta.yaml to add tool entry
+
+# 4. Create test config
+cat > configs/test_my_tool.yaml << EOF
+tool: my-tool
+experiment: quick_test
+description: "Test my tool integration"
+message: "Hello from ExperimentStash!"
 EOF
 
-# 3. Run experiment
-python3 scripts/run_experiment mytool my_experiment
-
-# 4. Remove tool (if needed)
-python3 scripts/remove_tool.py mytool
+# 5. Test integration
+python3 scripts/run_experiment my-tool test_my_tool --validate-only
+python3 scripts/run_experiment my-tool test_my_tool
 ```
 
-### Multi-Tool Experiment
+### Running Experiment Suite
 
 ```bash
-# Set up multiple tools
-python3 scripts/add_tool.py tool1 https://github.com/user/tool1.git
-python3 scripts/add_tool.py tool2 https://github.com/user/tool2.git
+# Run related experiments
+python3 scripts/run_experiment my-tool paper_experiments/figure1
+python3 scripts/run_experiment my-tool paper_experiments/figure2
+python3 scripts/run_experiment my-tool paper_experiments/table1
 
-# Create experiment configs
-# configs/comparison/experiment1.yaml -> tool1
-# configs/comparison/experiment2.yaml -> tool2
-
-# Run comparison
-python3 scripts/run_experiment tool1 comparison/experiment1
-python3 scripts/run_experiment tool2 comparison/experiment2
+# Validate before running suite
+for config in paper_experiments/*; do
+    python3 scripts/run_experiment my-tool $(basename $config .yaml) --validate-only
+done
 ```
 
-## 📖 API Reference
+## 🧪 Testing Your Setup
 
-### Scripts
+The repository includes a working test tool that demonstrates the full integration:
 
-#### `add_tool.py`
 ```bash
-python3 scripts/add_tool.py <tool-name> <github-url> [--branch <branch>]
-```
-**Purpose**: Adds a tool as a Git submodule and configures it for use
-**Actions**:
-- Adds tool as submodule
-- Updates meta.yaml with tool configuration
-- Sets up uv environment for the tool
-- Creates example experiment config
+# Test basic integration
+python3 scripts/run_experiment hydra-test-tool test_integration
 
-#### `remove_tool.py`
-```bash
-python3 scripts/remove_tool.py <tool-name> [--force]
+# Inspect the test tool
+ls tools/hydra-test-tool/
+cat tools/hydra-test-tool/src/main.py
+cat configs/test_integration.yaml
 ```
-**Purpose**: Completely removes a tool and all its references
-**Actions**:
-- Removes tool submodule
-- Cleans up metadata in meta.yaml
-- Creates backup of tool data
-- Warns about dependent configs
 
-#### `run_experiment`
-```bash
-python3 scripts/run_experiment <tool> <config-path> [--debug] [--validate-only]
-```
-**Purpose**: Executes experiments with proper error handling
-**Actions**:
-- Validates setup and configurations
-- Loads experiment configs
-- Executes experiment in tool's environment
-- Handles errors and timeouts gracefully
-
-#### `validate_setup.py`
-```bash
-python3 scripts/validate_setup.py [--list-configs] [--tool <tool>] [--debug]
-```
-**Purpose**: Validates the entire experimentStash setup
-**Actions**:
-- Validates tool configurations
-- Checks experiment mappings
-- Lists available configs
-- Reports configuration issues
+This provides a working reference for creating your own tools and configs.
 
 ## 🤝 Contributing
 
-1. **Fork the repository**
-2. **Create a feature branch**
-3. **Make your changes**
-4. **Add tests**
-5. **Submit a pull request**
+1. Fork the repository
+2. Create your feature branch
+3. Test with the included test tool
+4. Add your improvements
+5. Submit a pull request
 
 ## 📄 License
 
-[Your License Here]
+MIT License - see LICENSE file for details.
 
 ---
 
-**Built with ❤️ for reproducible research**
+**Built for reproducible research with any Hydra-based tool** 🧪⚡

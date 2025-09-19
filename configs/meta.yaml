@@ -1,4 +1,8 @@
-tools: {}
+tools:
+  hydra-test-tool:
+    path: tools/hydra-test-tool
+    entrypoint: src/main.py
+    description: "Minimal Hydra tool for testing ExperimentStash integration"
 experiment:
   name: neurips3025
   description: NeurIPS 3025 submission experiments

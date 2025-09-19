@@ -1,0 +1,20 @@
+tool: hydra-test-tool
+experiment: test_basic_integration
+description: "Test that top-level configs are successfully passed to Hydra tool"
+tags: ["test", "integration", "hydra"]
+estimated_runtime: "1m"
+
+# This message will be passed to the tool and displayed
+message: "Hello from top-level ExperimentStash config! Integration working perfectly!"
+
+# Example experiment name
+experiment_name: "ExperimentStash Integration Test"
+
+# Example parameters that the tool can read
+params:
+  test_param_1: "This is from top-level config"
+  test_param_2: 42
+  test_param_3: true
+  nested_param:
+    value: "Deep config value successfully passed"
+    count: 100

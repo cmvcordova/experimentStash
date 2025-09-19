@@ -138,21 +138,29 @@ Hydra debugging:
             print(f"[ERROR] No entrypoint found for tool '{args.tool}'")
             sys.exit(1)
 
-        # Build command
+        # Get the absolute path to the top-level configs directory
+        top_level_config_dir = os.path.abspath("configs")
+
+        # Build the command using Hydra's standard arguments
+        base_cmd = []
         if entrypoint.startswith("-m "):
-            # Module call: python -m src.main
-            module_name = entrypoint[3:]  # Remove "-m "
-            cmd = ["python", "-m", module_name, f"experiment={experiment_name}"]
+            module_name = entrypoint[3:]
+            base_cmd = ["python", "-m", module_name]
         else:
-            # Direct file call: python src.main.py
-            cmd = ["python", entrypoint, f"experiment={experiment_name}"]
+            base_cmd = ["python", entrypoint]
+
+        # Add Hydra arguments
+        cmd = base_cmd + [
+            f"--config-dir={top_level_config_dir}",
+            f"--config-name={args.config_path}.yaml"
+        ]
 
         print("=" * 60)
-        print(f"Running experiment: {experiment_name}")
+        print(f"Running experiment from config: {args.config_path}.yaml")
         print(f"Tool: {args.tool}")
-        print(f"Config: {args.config_path}")
+        print(f"Config Directory (passed to tool): {top_level_config_dir}")
         print(f"Command: {' '.join(cmd)}")
-        print(f"Output directory: {tool_path}/outputs/")
+        print(f"Working Directory (for execution): {tool_path}")
         print("=" * 60)
 
         if args.validate_only:
@@ -163,7 +171,7 @@ Hydra debugging:
         print("[INFO] Launching experiment...")
 
         # Use uv run to execute in the tool's environment
-        uv_cmd = ["uv", "run", "python"] + cmd[1:]
+        uv_cmd = ["uv", "run"] + cmd
 
         # Execute the command with real-time output capture
         try:
