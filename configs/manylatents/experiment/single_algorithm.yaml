@@ -1,0 +1,19 @@
+# @package _global_
+name: single_algorithm_pca_swissroll  # Wandb/logging run name
+
+# ExperimentStash metadata (not part of hydra config)
+
+defaults:
+  - /config  # Inherit base config structure
+  - override /algorithms/latent: pca
+  - override /data: swissroll
+  - override /callbacks/embedding: default
+  - override /metrics: test_metric
+  - _self_
+
+seed: 42
+project: your_project
+
+algorithms:
+  latent:
+    n_components: 2

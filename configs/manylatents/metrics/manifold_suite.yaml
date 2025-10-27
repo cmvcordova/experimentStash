@@ -1,0 +1,9 @@
+defaults:
+- dataset: null
+- embedding:
+  - trustworthiness
+  - fractal_dimension
+  - lid
+  - persistent_homology
+  - tangent_space 
+- _self_

@@ -3,6 +3,11 @@ tools:
     path: tools/hydra-test-tool
     entrypoint: src/main.py
     description: "Minimal Hydra tool for testing ExperimentStash integration"
+
+  manylatents:
+    path: tools/manylatents
+    entrypoint: "-m manylatents.main"
+    description: "ManyLatents - unified dimensionality reduction framework"
 experiment:
   name: neurips3025
   description: NeurIPS 3025 submission experiments

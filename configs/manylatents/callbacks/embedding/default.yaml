@@ -1,0 +1,5 @@
+defaults:
+  - save_embeddings
+  - plot_embeddings
+  - wandb_log_scores
+  - _self_

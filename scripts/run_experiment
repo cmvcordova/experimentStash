@@ -24,10 +24,11 @@ def load_meta_config():
         return None
 
 
-def load_experiment_config(config_path):
+def load_experiment_config(tool, config_path):
     """Load experiment config from the given path."""
     try:
-        config_file = Path("configs") / f"{config_path}.yaml"
+        # For manylatents and similar tools, configs are in configs/<tool>/experiment/<name>.yaml
+        config_file = Path("configs") / tool / "experiment" / f"{config_path}.yaml"
         if not config_file.exists():
             print(f"[ERROR] Config file not found: {config_file}")
             return None
@@ -108,16 +109,8 @@ Hydra debugging:
             sys.exit(1)
 
         # Load experiment config
-        experiment_config = load_experiment_config(args.config_path)
+        experiment_config = load_experiment_config(args.tool, args.config_path)
         if not experiment_config:
-            sys.exit(1)
-
-        # Validate config
-        config_tool = experiment_config.get("tool")
-        if config_tool != args.tool:
-            print(
-                f"[ERROR] Config specifies tool '{config_tool}' but you requested '{args.tool}'"
-            )
             sys.exit(1)
 
         # Get tool path and validate
@@ -126,11 +119,9 @@ Hydra debugging:
             print(f"[ERROR] Tool path '{tool_path}' does not exist")
             sys.exit(1)
 
-        # Get experiment name
-        experiment_name = experiment_config.get("experiment")
-        if not experiment_name:
-            print("[ERROR] No experiment name specified in config")
-            sys.exit(1)
+        # Experiment name comes from config filename (semantic identifier)
+        # This keeps experimentStash simple - filename = experiment identity
+        experiment_name = args.config_path
 
         # Get entrypoint
         entrypoint = tool_info.get("entrypoint")
@@ -139,7 +130,21 @@ Hydra debugging:
             sys.exit(1)
 
         # Get the absolute path to the top-level configs directory
-        top_level_config_dir = os.path.abspath("configs")
+        # For tools like manylatents, configs are organized as:
+        # configs/<tool>/experiment/<name>.yaml
+        # We need to pass the experiment directory as config-dir
+        from pathlib import Path
+
+        top_level_config_dir = Path("configs").resolve()
+        tool_config_dir = top_level_config_dir / args.tool
+
+        # Extract just the experiment name (without .yaml extension)
+        config_name = args.config_path
+        if config_name.endswith('.yaml'):
+            config_name = config_name[:-5]
+
+        # Prepend 'experiment/' since config is in the experiment subdirectory
+        config_name_with_path = f"experiment/{config_name}"
 
         # Build the command using Hydra's standard arguments
         base_cmd = []
@@ -149,18 +154,20 @@ Hydra debugging:
         else:
             base_cmd = ["python", entrypoint]
 
-        # Add Hydra arguments
+        # Add Hydra arguments to override config discovery
+        # This allows tools to accept top-level configs via CLI
         cmd = base_cmd + [
-            f"--config-dir={top_level_config_dir}",
-            f"--config-name={args.config_path}.yaml"
+            f"--config-dir={tool_config_dir}",
+            f"--config-name={config_name_with_path}"
         ]
 
         print("=" * 60)
-        print(f"Running experiment from config: {args.config_path}.yaml")
+        print(f"Running experiment: {config_name}")
         print(f"Tool: {args.tool}")
-        print(f"Config Directory (passed to tool): {top_level_config_dir}")
+        print(f"Config Directory: {tool_config_dir}")
+        print(f"Config File: {tool_config_dir}/experiment/{config_name}.yaml")
         print(f"Command: {' '.join(cmd)}")
-        print(f"Working Directory (for execution): {tool_path}")
+        print(f"Working Directory: {tool_path}")
         print("=" * 60)
 
         if args.validate_only:

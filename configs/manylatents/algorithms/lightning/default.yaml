@@ -1,0 +1,4 @@
+defaults:
+- network: null
+- optimizer: null
+- loss: null
