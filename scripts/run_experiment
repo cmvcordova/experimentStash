@@ -87,7 +87,8 @@ Hydra debugging:
         "--validate-only", action="store_true", help="Only validate setup, don't run"
     )
 
-    args = parser.parse_args()
+    # Use parse_known_args to allow passing Hydra overrides
+    args, additional_args = parser.parse_known_args()
 
     try:
         # Validate basic setup
@@ -156,10 +157,12 @@ Hydra debugging:
 
         # Add Hydra arguments to override config discovery
         # This allows tools to accept top-level configs via CLI
+        # Use --config-path to prepend the external config path (higher priority)
+        # This ensures external configs override internal tool defaults
         cmd = base_cmd + [
-            f"--config-dir={tool_config_dir}",
+            f"--config-path={tool_config_dir}",
             f"--config-name={config_name_with_path}"
-        ]
+        ] + additional_args
 
         print("=" * 60)
         print(f"Running experiment: {config_name}")
@@ -168,6 +171,8 @@ Hydra debugging:
         print(f"Config File: {tool_config_dir}/experiment/{config_name}.yaml")
         print(f"Command: {' '.join(cmd)}")
         print(f"Working Directory: {tool_path}")
+        if additional_args:
+            print(f"Hydra Overrides: {' '.join(additional_args)}")
         print("=" * 60)
 
         if args.validate_only:
@@ -177,8 +182,16 @@ Hydra debugging:
         # Run the experiment
         print("[INFO] Launching experiment...")
 
-        # Use uv run to execute in the tool's environment
-        uv_cmd = ["uv", "run"] + cmd
+        # Check if we're already in a virtual environment
+        # If so, use it directly instead of uv run (for HPC compute nodes without internet)
+        in_venv = os.environ.get('VIRTUAL_ENV') is not None
+        
+        if in_venv:
+            print(f"[INFO] Using activated virtual environment: {os.environ.get('VIRTUAL_ENV')}")
+            final_cmd = cmd  # Use existing activated venv
+        else:
+            print("[INFO] No virtual environment detected, using uv run")
+            final_cmd = ["uv", "run"] + cmd
 
         # Execute the command with real-time output capture
         try:
@@ -187,7 +200,7 @@ Hydra debugging:
             import time
 
             process = subprocess.Popen(
-                uv_cmd,
+                final_cmd,
                 cwd=tool_path,
                 env=os.environ.copy(),
                 stdout=subprocess.PIPE,
