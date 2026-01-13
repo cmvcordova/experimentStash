@@ -1,51 +1,33 @@
 # ExperimentStash
 
-**Config-centric experiment reproducibility for any Hydra-based tool.**
+**Freeze experiments in time. Config + code commit = exact reproduction.**
 
 ---
 
-## What It Does
+## Core Idea
 
-ExperimentStash captures experiments as **config + pinned code** for exact reproduction:
+```
+snapshot = flattened_config + tool_commit_pin + git_tag
+```
 
-1. **Add any Hydra tool** as a git submodule
-2. **Copy or snapshot configs** to top-level for versioning
-3. **Run experiments** via unified orchestrator
-4. **Snapshot for papers** with flattened config + commit pin
+Months later: `git checkout snapshot/<tag>` → identical results.
 
 ---
 
 ## Quick Start
 
-### 1. Add Your Tool
 ```bash
+# 1. Add tool
 python scripts/add_tool mytool https://github.com/org/mytool
-```
 
-This:
-- Adds submodule to `tools/mytool/`
-- Installs deps (`uv sync`)
-- Copies configs to `configs/mytool/`
-- Registers in `configs/meta.yaml`
-
-### 2. Run Experiment
-```bash
+# 2. Run experiment
 python scripts/run_experiment mytool my_experiment
-```
 
-### 3. Snapshot for Reproducibility
-```bash
-python scripts/snapshot_experiment mytool my_experiment --tag paper-v1 --commit
-```
+# 3. Freeze for reproduction
+python scripts/snapshot_experiment mytool my_experiment --tag v1.0 --commit
 
-Creates:
-- Flattened config (no defaults, all values resolved)
-- Git tag `snapshot/paper-v1`
-- Tool pinned at current commit
-
-### 4. Reproduce Later
-```bash
-git checkout snapshot/paper-v1
+# 4. Reproduce anytime
+git checkout snapshot/v1.0
 git submodule update --init
 python scripts/run_experiment mytool my_experiment
 ```
@@ -54,10 +36,39 @@ python scripts/run_experiment mytool my_experiment
 
 ## Two Modes
 
-| Mode | Script | Purpose |
-|------|--------|---------|
-| **A: Copy** | `add_tool` | Development - configs editable |
-| **B: Snapshot** | `snapshot_experiment` | Production - frozen for papers |
+| Mode | Script | When |
+|------|--------|------|
+| **Copy** | `add_tool` | Development - iterate on configs |
+| **Freeze** | `snapshot_experiment` | Production - lock for papers/sharing |
+
+---
+
+## What Freeze Does
+
+```bash
+python scripts/snapshot_experiment mytool my_exp --tag camera-ready --commit
+```
+
+1. **Flattens config** - resolves all `defaults:`, no interpolations left
+2. **Pins tool commit** - submodule locked to exact SHA
+3. **Creates git tag** - `snapshot/camera-ready`
+4. **Commits everything** - one atomic reproducibility checkpoint
+
+Output:
+```yaml
+# configs/mytool/snapshots/camera-ready/my_exp.yaml
+# SNAPSHOT: mytool/my_exp
+# TOOL_COMMIT: abc1234
+# TIMESTAMP: 2026-01-12
+
+name: my_exp
+data:
+  type: swissroll
+  n_samples: 1000
+model:
+  hidden_dim: 256
+# ... every value resolved
+```
 
 ---
 
@@ -65,135 +76,66 @@ python scripts/run_experiment mytool my_experiment
 
 ```
 experimentStash/
-├── configs/
-│   ├── meta.yaml              # Tool registry
-│   └── <tool>/
-│       ├── experiment/        # Experiment configs
-│       ├── data/, metrics/    # Supporting Hydra groups
-│       └── snapshots/<tag>/   # Frozen configs (Mode B)
-├── tools/
-│   └── <tool>/                # Git submodule (pinned commit)
+├── configs/<tool>/
+│   ├── experiment/           # Working configs (Mode A)
+│   └── snapshots/<tag>/      # Frozen configs (Mode B)
+├── tools/<tool>/             # Submodule (pinned on freeze)
 └── scripts/
-    ├── run_experiment         # Unified runner
-    ├── add_tool               # Mode A: copy configs
-    └── snapshot_experiment    # Mode B: frozen snapshot
+    ├── add_tool              # Add + copy configs
+    ├── run_experiment        # Execute
+    └── snapshot_experiment   # Freeze
 ```
 
 ---
 
-## Tool Requirements
+## Tool Compatibility
 
-For a tool to work with experimentStash, its `main.py` decorator should allow CLI config override:
+Tools must accept CLI config path:
 
 ```python
-# Compatible (allows --config-path override)
+# Works
 @hydra.main(config_path=None, config_name=None, version_base=None)
 
-# Not compatible (ignores CLI)
-@hydra.main(config_path="../configs", config_name="config", version_base=None)
+# Doesn't work (hardcoded)
+@hydra.main(config_path="../configs", config_name="config")
 ```
-
-The `add_tool` script warns if decorator needs fixing.
 
 ---
 
-## Config Injection Pattern
-
-ExperimentStash injects configs via Hydra CLI:
+## Commands
 
 ```bash
-python -m tool.main \
-  --config-path=/path/to/experimentStash/configs/tool \
-  --config-name=experiment/my_experiment \
-  override=value
-```
+# Add tool
+python scripts/add_tool <name> <repo_url>
 
-`--config-path` prepends to search path, so tool defaults still work as fallback.
+# Run
+python scripts/run_experiment <tool> <experiment> [overrides...]
 
----
-
-## Snapshot Format
-
-Snapshots are fully-resolved YAML with metadata header:
-
-```yaml
-# SNAPSHOT: mytool/my_experiment
-# TAG: paper-v1
-# TOOL_COMMIT: abc1234
-# TIMESTAMP: 2026-01-12 22:30:00
-# DO NOT EDIT - regenerate with: python scripts/snapshot_experiment ...
-
-name: my_experiment
-data:
-  type: swissroll
-  n_samples: 1000
-# ... all values resolved, no ${} interpolations
-```
-
----
-
-## Example: Paper Reproduction Setup
-
-```bash
-# 1. Fork experimentStash for your paper
-git clone https://github.com/you/experimentStash-mypaper
-
-# 2. Add your tool
-python scripts/add_tool myanalysis https://github.com/org/myanalysis
-
-# 3. Create experiment config
-cat > configs/myanalysis/experiment/figure1.yaml << 'EOF'
-# @package _global_
-defaults:
-  - /data: dataset_a
-  - /model: transformer
-name: figure1_main_result
-# ...
-EOF
-
-# 4. Run and iterate
-python scripts/run_experiment myanalysis figure1
-
-# 5. Snapshot final version for paper
-python scripts/snapshot_experiment myanalysis figure1 --tag camera-ready --commit
-
-# 6. Push - reviewers can reproduce exactly
-git push origin main --tags
-```
-
----
-
-## Commands Reference
-
-```bash
-# Add tool (Mode A)
-python scripts/add_tool <name> <repo_url> [--entrypoint "-m name.main"]
-
-# Run experiment
-python scripts/run_experiment <tool> <experiment> [hydra_overrides...]
-
-# Validate without running
+# Validate only
 python scripts/run_experiment <tool> <experiment> --validate-only
 
-# Snapshot (Mode B)
-python scripts/snapshot_experiment <tool> <experiment> --tag <tag> [--commit]
+# Freeze
+python scripts/snapshot_experiment <tool> <experiment> --tag <tag> --commit
 ```
 
 ---
 
-## Troubleshooting
+## Paper Workflow
 
-**"Config not found"**
-- Check `configs/<tool>/experiment/<name>.yaml` exists
-- Verify experiment name matches filename (no `.yaml` suffix needed)
+```bash
+# Fork for your paper
+git clone https://github.com/you/experimentStash-mypaper
 
-**"Tool not found"**
-- Run `python scripts/add_tool` or manually add to `configs/meta.yaml`
+# Add your tool
+python scripts/add_tool myanalysis https://github.com/org/myanalysis
 
-**Config resolution fails**
-- Tool decorator may be hardcoded - change to `config_path=None`
-- Missing supporting configs (data/, metrics/) - copy from tool
+# Iterate
+python scripts/run_experiment myanalysis figure1
 
-**Hydra composition errors**
-- Ensure all `defaults:` references exist in `configs/<tool>/`
-- Use absolute paths with leading `/` (e.g., `/data: mydata`)
+# Freeze final
+python scripts/snapshot_experiment myanalysis figure1 --tag camera-ready --commit
+
+# Share
+git push origin main --tags
+# Reviewers: git checkout snapshot/camera-ready && git submodule update --init
+```
