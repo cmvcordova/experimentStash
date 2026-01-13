@@ -37,12 +37,4 @@ jobs:
         test -f README.md
 
     - name: Validate meta.yaml structure
-      run: |
-        python -c "
-import yaml
-with open('configs/meta.yaml') as f:
-    meta = yaml.safe_load(f)
-assert 'tools' in meta, 'Missing tools section'
-assert 'experiment' in meta, 'Missing experiment section'
-print('meta.yaml structure OK')
-"
+      run: python -c "import yaml; meta = yaml.safe_load(open('configs/meta.yaml')); assert 'tools' in meta; assert 'experiment' in meta; print('OK')"
