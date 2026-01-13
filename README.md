@@ -1,111 +1,86 @@
 # ExperimentStash
 
-*Reproducible ML experiments through config-centric orchestration*
-
-## What It Does
-
-ExperimentStash manages experiments by:
-- **Top-level config storage** - All experiment configs live in `configs/<tool>/experiment/`
-- **Pinned tool versions** - Tools are git submodules at specific commits
-- **Clean orchestration** - Pass configs to tools via CLI, no coupling
-- **Full reproducibility** - Config + tool version = exact reproduction
+*Config-centric experiment reproducibility for any Hydra-based tool.*
 
 ## Quick Start
 
 ```bash
-# Run an experiment
-python scripts/run_experiment <tool> <experiment_name>
+# 1. Add your tool
+python scripts/add_tool mytool https://github.com/org/mytool
 
-# Example
-python scripts/run_experiment manylatents single_algorithm
+# 2. Run experiment
+python scripts/run_experiment mytool my_experiment
+
+# 3. Snapshot for paper reproducibility
+python scripts/snapshot_experiment mytool my_experiment --tag v1.0 --commit
 ```
 
 ## Structure
 
 ```
 experimentStash/
-├── configs/                    # All experiment configs (top-level)
+├── configs/
+│   ├── meta.yaml              # Tool registry
 │   └── <tool>/
-│       ├── experiment/         # Experiment configs
-│       │   └── my_exp.yaml     # Filename = experiment identifier
-│       ├── data/              # Supporting configs
-│       ├── algorithms/
-│       └── ...
-├── tools/                      # Tool source code (git submodules)
-│   └── <tool>/                # Pinned at specific commit
+│       ├── experiment/        # Experiment configs
+│       └── snapshots/<tag>/   # Frozen configs (fully resolved)
+├── tools/
+│   └── <tool>/                # Git submodule (pinned commit)
 └── scripts/
-    └── run_experiment          # Orchestrator
+    ├── run_experiment         # Run experiments
+    ├── add_tool               # Add new tools (Mode A)
+    └── snapshot_experiment    # Freeze for reproduction (Mode B)
 ```
 
-## How It Works
+## Two Modes
 
-**1. Experiment configs use filenames as identifiers:**
-```yaml
-# configs/manylatents/experiment/my_pca_test.yaml
-#                                  ^^^^^^^^^^^^
-#                                  This IS the experiment ID
-
-# @package _global_
-name: pca_swissroll_d2  # Human-readable name (for wandb/logs)
-
-defaults:
-  - /config
-  - override /algorithms/latent: pca
-  - override /data: swissroll
-
-algorithms:
-  latent:
-    n_components: 2
-```
-
-**2. Tools are executed from their directory with top-level configs:**
-```bash
-# ExperimentStash does:
-cd tools/manylatents
-python -m manylatents.main \
-  --config-dir=/path/to/experimentStash/configs/manylatents \
-  --config-name=experiment/my_pca_test
-```
-
-**3. Reproducibility tracking:**
-- **Experiment ID**: Filename (`my_pca_test`)
-- **Config**: `configs/manylatents/experiment/my_pca_test.yaml`
-- **Tool version**: `tools/manylatents` @ commit `abc123`
-- **Result**: Exact reproduction months/years later
+| Mode | Script | Use Case |
+|------|--------|----------|
+| **Copy** | `add_tool` | Development - configs editable |
+| **Snapshot** | `snapshot_experiment` | Papers - frozen + commit pinned |
 
 ## Adding Tools
 
-1. Add tool as submodule:
 ```bash
-git submodule add <repo_url> tools/<tool_name>
-cd tools/<tool_name> && uv sync
+python scripts/add_tool <name> <repo_url> [--entrypoint "-m name.main"]
 ```
 
-2. Register in `configs/meta.yaml`:
-```yaml
-tools:
-  <tool_name>:
-    path: tools/<tool_name>
-    entrypoint: "-m <tool_name>.main"
-    description: "Tool description"
-```
+This:
+- Adds tool as git submodule
+- Installs dependencies (`uv sync`)
+- Copies configs to `configs/<tool>/`
+- Registers in `configs/meta.yaml`
 
-3. Copy tool's config structure:
+## Reproducibility
+
 ```bash
-cp -r tools/<tool_name>/<tool_name>/configs/* configs/<tool_name>/
+# Create snapshot
+python scripts/snapshot_experiment mytool my_exp --tag camera-ready --commit
+
+# Later: exact reproduction
+git checkout snapshot/camera-ready
+git submodule update --init
+python scripts/run_experiment mytool my_exp
 ```
 
-4. Add experiment configs to `configs/<tool_name>/experiment/`
+## Tool Requirements
 
-## Key Principles
+Tools must allow CLI config override:
 
-- **Filename = Experiment Identity** - No `experiment:` field needed, filesystem provides semantic link
-- **Config Inheritance** - Experiments inherit from base: `defaults: [/config, ...]`
-- **Tool Flexibility** - Tools keep default configs, CLI overrides for orchestration
-- **Clean Separation** - ExperimentStash manages configs, tools execute logic
+```python
+# Compatible
+@hydra.main(config_path=None, config_name=None, version_base=None)
+
+# Not compatible (hardcoded path)
+@hydra.main(config_path="../configs", config_name="config", version_base=None)
+```
 
 ## Requirements
 
 - Python 3.10+
 - `uv` for dependency management
 - Git for submodule management
+
+## Documentation
+
+See [CLAUDE.md](CLAUDE.md) for detailed usage guide.
