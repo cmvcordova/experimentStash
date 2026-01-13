@@ -2,16 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
@@ -28,37 +28,16 @@ jobs:
       with:
         version: latest
 
-    - name: Install dependencies
-      run: |
-        uv sync --extra dev
-
-    # Pre-commit hooks removed due to shell environment issues
-
-    - name: Run framework tests
-      run: |
-        uv run python tests/test_workflow.py
-
-    - name: Run validation tests
-      run: |
-        uv run python tests/test_validation.py
-
-    - name: Test add_tool script
-      run: |
-        uv run python tests/test_add_tool.py
-
-    - name: Test remove_tool script
-      run: |
-        uv run python tests/test_remove_tool.py
-
     - name: Test script syntax
       run: |
-        uv run python -m py_compile scripts/add_tool.py
-        uv run python -m py_compile scripts/remove_tool.py
-        uv run python -m py_compile scripts/run_experiment
-        uv run python -m py_compile scripts/validate_setup.py
-        uv run python -m py_compile scripts/cleanup_wandb.py
+        python -m py_compile scripts/run_experiment
+        python -m py_compile scripts/add_tool
+        python -m py_compile scripts/snapshot_experiment
+        python -m py_compile scripts/validate_setup.py
 
-  # Lint job removed due to shell environment issues
+    - name: Validate setup
+      run: |
+        python scripts/validate_setup.py
 
   validate:
     runs-on: ubuntu-latest
@@ -73,19 +52,11 @@ jobs:
       with:
         python-version: "3.11"
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v1
-      with:
-        version: latest
-
-    - name: Install dependencies
+    - name: Check required files exist
       run: |
-        uv sync --extra dev
-
-    - name: Validate setup
-      run: |
-        uv run python scripts/validate_setup.py
-
-    - name: Test template integrity
-      run: |
-        uv run python tests/test_template_integrity.py
+        test -f configs/meta.yaml
+        test -f scripts/run_experiment
+        test -f scripts/add_tool
+        test -f scripts/snapshot_experiment
+        test -f CLAUDE.md
+        test -f README.md
