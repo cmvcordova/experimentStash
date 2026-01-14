@@ -229,36 +229,36 @@ Each tool gets its own isolated config namespace:
 experimentStash/
 ├── configs/
 │   ├── meta.yaml                    # Tool registry
-│   ├── manylatents/
-│   │   └── experiment/              # manylatents experiments only
-│   ├── geomancy/
-│   │   └── experiment/              # geomancy experiments only
-│   └── manyagents/
-│       └── experiment/              # manyagents experiments only
+│   ├── tool1/
+│   │   └── experiment/              # tool1 experiments only
+│   ├── tool2/
+│   │   └── experiment/              # tool2 experiments only
+│   └── tool3/
+│       └── experiment/              # tool3 experiments only
 └── tools/
-    ├── manylatents/                 # Submodule
-    ├── geomancy/                    # Submodule
-    └── manyagents/                  # Submodule
+    ├── tool1/                       # Submodule
+    ├── tool2/                       # Submodule
+    └── tool3/                       # Submodule
 ```
 
 ### Tool Registry (meta.yaml)
 
 ```yaml
 tools:
-  manylatents:
-    path: tools/manylatents
-    entrypoint: "-m manylatents.main"
-    search_packages: "manylatents.configs"
+  tool1:
+    path: tools/tool1
+    entrypoint: "-m tool1.main"
+    search_packages: "tool1.configs"
 
-  geomancy:
-    path: tools/geomancy
-    entrypoint: "-m geomancy.main"
-    search_packages: "geomancy.configs:manylatents.configs"  # Can include deps
+  tool2:
+    path: tools/tool2
+    entrypoint: "-m tool2.main"
+    search_packages: "tool2.configs:tool1.configs"  # Can include deps
 
-  manyagents:
-    path: tools/manyagents
-    entrypoint: "-m manyagents.main"
-    search_packages: "manyagents.configs"
+  tool3:
+    path: tools/tool3
+    entrypoint: "-m tool3.main"
+    search_packages: "tool3.configs"
 ```
 
 ### Isolation
@@ -273,7 +273,7 @@ tools:
 ### Running
 
 ```bash
-python scripts/run_experiment manylatents my_exp    # Uses configs/manylatents/
-python scripts/run_experiment geomancy figure1      # Uses configs/geomancy/
-python scripts/run_experiment manyagents prompt_test # Uses configs/manyagents/
+python scripts/run_experiment tool1 my_exp      # Uses configs/tool1/
+python scripts/run_experiment tool2 figure1     # Uses configs/tool2/
+python scripts/run_experiment tool3 prompt_test # Uses configs/tool3/
 ```
