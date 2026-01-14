@@ -218,3 +218,62 @@ configs/
 python scripts/run_experiment manylatents my_exp --info searchpath
 # Should show both file:// (experiments) and pkg:// (base configs)
 ```
+
+---
+
+## Multi-Tool Structure
+
+Each tool gets its own isolated config namespace:
+
+```
+experimentStash/
+├── configs/
+│   ├── meta.yaml                    # Tool registry
+│   ├── manylatents/
+│   │   └── experiment/              # manylatents experiments only
+│   ├── geomancy/
+│   │   └── experiment/              # geomancy experiments only
+│   └── manyagents/
+│       └── experiment/              # manyagents experiments only
+└── tools/
+    ├── manylatents/                 # Submodule
+    ├── geomancy/                    # Submodule
+    └── manyagents/                  # Submodule
+```
+
+### Tool Registry (meta.yaml)
+
+```yaml
+tools:
+  manylatents:
+    path: tools/manylatents
+    entrypoint: "-m manylatents.main"
+    search_packages: "manylatents.configs"
+
+  geomancy:
+    path: tools/geomancy
+    entrypoint: "-m geomancy.main"
+    search_packages: "geomancy.configs:manylatents.configs"  # Can include deps
+
+  manyagents:
+    path: tools/manyagents
+    entrypoint: "-m manyagents.main"
+    search_packages: "manyagents.configs"
+```
+
+### Isolation
+
+| Aspect | Behavior |
+|--------|----------|
+| `--config-path` | Points to `configs/<tool>/` for that tool |
+| `search_packages` | Tool-specific; can include dependencies |
+| Experiments | Namespaced by tool directory |
+| Collisions | None - each tool has isolated namespace |
+
+### Running
+
+```bash
+python scripts/run_experiment manylatents my_exp    # Uses configs/manylatents/
+python scripts/run_experiment geomancy figure1      # Uses configs/geomancy/
+python scripts/run_experiment manyagents prompt_test # Uses configs/manyagents/
+```
