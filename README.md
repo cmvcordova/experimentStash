@@ -81,6 +81,70 @@ Tools must allow CLI config override:
 - `uv` for dependency management
 - Git for submodule management
 
+---
+
+## Advanced: Avoiding Config Duplication with SearchPathPlugin
+
+By default, `add_tool` copies base configs into `configs/<tool>/`. For large config sets or when you want to keep configs in the installed package, you can use Hydra's SearchPathPlugin pattern instead.
+
+### The Problem
+
+ExperimentStash uses `--config-path` to point Hydra at experiment configs. But your tool's base configs (algorithms, data, metrics) live in its installed package. Without extra setup, Hydra can't find them.
+
+### Solution: Dynamic SearchPathPlugin
+
+1. **Add `search_packages` to meta.yaml**:
+
+```yaml
+tools:
+  mytool:
+    path: tools/mytool
+    entrypoint: "-m mytool.main"
+    search_packages: "mytool.configs:mytool.extension.configs"  # Colon-separated
+```
+
+2. **Register the plugin in your tool's main.py** (before `@hydra.main`):
+
+```python
+try:
+    from shop.hydra import register_dynamic_search_path
+    register_dynamic_search_path()
+except ImportError:
+    pass  # shop not installed
+```
+
+3. **Use `config_path=None`** in your `@hydra.main` decorator:
+
+```python
+@hydra.main(config_path=None, config_name=None, version_base=None)
+def main(cfg):
+    ...
+```
+
+### How It Works
+
+1. `run_experiment` sets `HYDRA_SEARCH_PACKAGES` env var from meta.yaml
+2. Your tool registers `SearchPathPlugin` on import
+3. The plugin reads the env var and adds `pkg://` paths to Hydra's search path
+4. Experiment configs can reference package configs without copying
+
+### Result
+
+Your experiment configs can reference package configs:
+
+```yaml
+# configs/mytool/experiment/my_exp.yaml
+defaults:
+  - /algorithm: pca    # Found in pkg://mytool.configs
+  - /data: swissroll   # Found in pkg://mytool.configs
+
+name: my_experiment
+```
+
+No config duplication needed. Package updates are picked up automatically.
+
+---
+
 ## Documentation
 
 See [CLAUDE.md](CLAUDE.md) for detailed usage guide.

@@ -1,0 +1,38 @@
+# @package _global_
+# SearchPathPlugin Integration Test
+#
+# This config validates that DynamicSearchPathPlugin is working by
+# referencing configs from pkg://manylatents.configs
+#
+# Run with:
+#   python scripts/run_experiment manylatents searchpath_test
+
+defaults:
+  - /config
+  - _self_
+
+name: searchpath_test
+seed: 42
+project: searchpath_test
+
+# Override data and algorithm via CLI or inline
+data:
+  _target_: manylatents.data.swissroll.SwissRollDataModule
+  test_split: 0.2
+  n_distributions: 10
+  n_points_per_distribution: 100
+  noise: 0.2
+  manifold_noise: 0.2
+  width: 10.0
+  random_state: ${seed}
+  rotate_to_dim: 100
+  mode: full
+  shuffle_traindata: false
+  use_gap: false
+  n_gaps: 3
+  gap_fraction: 0.3
+
+algorithms:
+  latent:
+    _target_: manylatents.algorithms.latent.pca.PCAModule
+    n_components: 2

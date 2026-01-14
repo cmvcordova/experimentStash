@@ -139,3 +139,82 @@ python scripts/snapshot_experiment myanalysis figure1 --tag camera-ready --commi
 git push origin main --tags
 # Reviewers: git checkout snapshot/camera-ready && git submodule update --init
 ```
+
+---
+
+## SearchPathPlugin (Avoid Config Copying)
+
+Instead of copying tool configs, discover them from installed packages.
+
+### Setup
+
+**1. Add `search_packages` to meta.yaml:**
+
+```yaml
+tools:
+  manylatents:
+    path: tools/manylatents
+    entrypoint: "-m manylatents.main"
+    search_packages: "manylatents.configs"  # Colon-separated for multiple
+```
+
+**2. Register plugin in tool's main.py** (before `@hydra.main`):
+
+```python
+try:
+    from shop.hydra import register_dynamic_search_path
+    register_dynamic_search_path()
+except ImportError:
+    pass
+```
+
+**3. Use `config_path=None`** in the tool:
+
+```python
+@hydra.main(config_path=None, config_name=None, version_base=None)
+def main(cfg):
+    ...
+```
+
+### How It Works
+
+```
+run_experiment manylatents my_exp
+         ↓
+Sets HYDRA_SEARCH_PACKAGES="manylatents.configs"
+         ↓
+Tool registers DynamicSearchPathPlugin
+         ↓
+Hydra search path includes:
+  - file://experimentStash/configs/manylatents  (experiments)
+  - pkg://manylatents.configs                   (base configs)
+```
+
+### Multiple Tools
+
+Each tool gets its own config directory and search packages:
+
+```yaml
+tools:
+  manylatents:
+    search_packages: "manylatents.configs"
+  geomancy:
+    search_packages: "geomancy.configs:manylatents.configs"  # Can include dependencies
+  manyagents:
+    search_packages: "manyagents.configs"
+```
+
+Directory structure:
+```
+configs/
+├── manylatents/experiment/   # manylatents experiments
+├── geomancy/experiment/      # geomancy experiments
+└── manyagents/experiment/    # manyagents experiments
+```
+
+### Verify
+
+```bash
+python scripts/run_experiment manylatents my_exp --info searchpath
+# Should show both file:// (experiments) and pkg:// (base configs)
+```

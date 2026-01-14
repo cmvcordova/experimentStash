@@ -51,15 +51,24 @@ def build_command(entrypoint, tool_config_dir, config_name, additional_args):
     ] + additional_args
 
 
-def run_process(cmd, cwd):
-    in_venv = os.environ.get('VIRTUAL_ENV') is not None
+def run_process(cmd, cwd, search_packages=None):
+    """Run the command with optional Hydra search path packages."""
+    env = os.environ.copy()
+
+    # Set HYDRA_SEARCH_PACKAGES if tool specifies search_packages
+    # This enables DynamicSearchPathPlugin to discover pkg:// configs
+    if search_packages:
+        env["HYDRA_SEARCH_PACKAGES"] = search_packages
+        info(f"SearchPath packages: {search_packages}")
+
+    in_venv = env.get('VIRTUAL_ENV') is not None
     final_cmd = cmd if in_venv else ["uv", "run"] + cmd
 
     if in_venv:
         info(f"Using venv: {os.environ.get('VIRTUAL_ENV')}")
 
     process = subprocess.Popen(
-        final_cmd, cwd=cwd, env=os.environ.copy(),
+        final_cmd, cwd=cwd, env=env,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, bufsize=1, universal_newlines=True
     )
@@ -155,7 +164,8 @@ def main():
         return 0
 
     info("Launching experiment...")
-    return run_process(cmd, tool_path)
+    search_packages = tool_info.get("search_packages")
+    return run_process(cmd, tool_path, search_packages=search_packages)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,14 @@ tools:
     entrypoint: src/main.py
     description: "Minimal Hydra tool for testing ExperimentStash integration"
 
+  manylatents:
+    path: tools/manylatents
+    entrypoint: "-m manylatents.main"
+    description: "Dimensionality reduction and foundation model encoding"
+    # SearchPathPlugin: packages to add to Hydra search path (colon-separated)
+    # This enables using pkg:// configs from installed packages without copying
+    search_packages: "manylatents.configs"
+
 experiment:
   name: default
   description: ExperimentStash experiments
